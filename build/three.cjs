@@ -91,7 +91,6 @@ const UnsignedShort4444Type = 1017;
 const UnsignedShort5551Type = 1018;
 const UnsignedInt248Type = 1020;
 const AlphaFormat = 1021;
-const RGBFormat = 1022; // @deprecated since r137
 const RGBAFormat = 1023;
 const LuminanceFormat = 1024;
 const LuminanceAlphaFormat = 1025;
@@ -7394,14 +7393,6 @@ class Euler {
 		yield this._y;
 		yield this._z;
 		yield this._order;
-
-	}
-
-	// @deprecated since r138, 02cf0df1cb4575d5842fef9c85bb5a89fe020d53
-
-	toVector3() {
-
-		console.error( 'THREE.Euler: .toVector3() has been removed. Use Vector3.setFromEuler() instead' );
 
 	}
 
@@ -24513,15 +24504,6 @@ function WebGLUtils( gl, extensions, capabilities ) {
 		if ( p === LuminanceAlphaFormat ) return gl.LUMINANCE_ALPHA;
 		if ( p === DepthFormat ) return gl.DEPTH_COMPONENT;
 		if ( p === DepthStencilFormat ) return gl.DEPTH_STENCIL;
-
-		// @deprecated since r137
-
-		if ( p === RGBFormat ) {
-
-			console.warn( 'THREE.WebGLRenderer: THREE.RGBFormat has been removed. Use THREE.RGBAFormat instead. https://github.com/mrdoob/three.js/pull/23228' );
-			return gl.RGBA;
-
-		}
 
 		// WebGL 1 sRGB fallback
 
@@ -49931,54 +49913,6 @@ var DataUtils = /*#__PURE__*/Object.freeze({
 	fromHalfFloat: fromHalfFloat
 });
 
-// r134, d65e0af06644fe5a84a6fc0e372f4318f95a04c0
-
-function ImmediateRenderObject() {
-
-	console.error( 'THREE.ImmediateRenderObject has been removed.' );
-
-}
-
-// r138, 48b05d3500acc084df50be9b4c90781ad9b8cb17
-
-class WebGLMultisampleRenderTarget extends WebGLRenderTarget {
-
-	constructor( width, height, options ) {
-
-		console.error( 'THREE.WebGLMultisampleRenderTarget has been removed. Use a normal render target and set the "samples" property to greater 0 to enable multisampling.' );
-		super( width, height, options );
-		this.samples = 4;
-
-	}
-
-}
-
-// r138, f9cd9cab03b7b64244e304900a3a2eeaa3a588ce
-
-class DataTexture2DArray extends DataArrayTexture {
-
-	constructor( data, width, height, depth ) {
-
-		console.warn( 'THREE.DataTexture2DArray has been renamed to DataArrayTexture.' );
-		super( data, width, height, depth );
-
-	}
-
-}
-
-// r138, f9cd9cab03b7b64244e304900a3a2eeaa3a588ce
-
-class DataTexture3D extends Data3DTexture {
-
-	constructor( data, width, height, depth ) {
-
-		console.warn( 'THREE.DataTexture3D has been renamed to Data3DTexture.' );
-		super( data, width, height, depth );
-
-	}
-
-}
-
 // r144
 
 class BoxBufferGeometry extends BoxGeometry {
@@ -50331,8 +50265,6 @@ exports.Cylindrical = Cylindrical;
 exports.Data3DTexture = Data3DTexture;
 exports.DataArrayTexture = DataArrayTexture;
 exports.DataTexture = DataTexture;
-exports.DataTexture2DArray = DataTexture2DArray;
-exports.DataTexture3D = DataTexture3D;
 exports.DataTextureLoader = DataTextureLoader;
 exports.DataUtils = DataUtils;
 exports.DecrementStencilOp = DecrementStencilOp;
@@ -50390,7 +50322,6 @@ exports.IcosahedronGeometry = IcosahedronGeometry;
 exports.ImageBitmapLoader = ImageBitmapLoader;
 exports.ImageLoader = ImageLoader;
 exports.ImageUtils = ImageUtils;
-exports.ImmediateRenderObject = ImmediateRenderObject;
 exports.IncrementStencilOp = IncrementStencilOp;
 exports.IncrementWrapStencilOp = IncrementWrapStencilOp;
 exports.InstancedBufferAttribute = InstancedBufferAttribute;
@@ -50545,7 +50476,6 @@ exports.RGBA_PVRTC_4BPPV1_Format = RGBA_PVRTC_4BPPV1_Format;
 exports.RGBA_S3TC_DXT1_Format = RGBA_S3TC_DXT1_Format;
 exports.RGBA_S3TC_DXT3_Format = RGBA_S3TC_DXT3_Format;
 exports.RGBA_S3TC_DXT5_Format = RGBA_S3TC_DXT5_Format;
-exports.RGBFormat = RGBFormat;
 exports.RGB_ETC1_Format = RGB_ETC1_Format;
 exports.RGB_ETC2_Format = RGB_ETC2_Format;
 exports.RGB_PVRTC_2BPPV1_Format = RGB_PVRTC_2BPPV1_Format;
@@ -50649,7 +50579,6 @@ exports.WebGL3DRenderTarget = WebGL3DRenderTarget;
 exports.WebGLArrayRenderTarget = WebGLArrayRenderTarget;
 exports.WebGLCubeRenderTarget = WebGLCubeRenderTarget;
 exports.WebGLMultipleRenderTargets = WebGLMultipleRenderTargets;
-exports.WebGLMultisampleRenderTarget = WebGLMultisampleRenderTarget;
 exports.WebGLRenderTarget = WebGLRenderTarget;
 exports.WebGLRenderer = WebGLRenderer;
 exports.WebGLUtils = WebGLUtils;
@@ -50661,3 +50590,4 @@ exports.ZeroSlopeEnding = ZeroSlopeEnding;
 exports.ZeroStencilOp = ZeroStencilOp;
 exports._SRGBAFormat = _SRGBAFormat;
 exports.sRGBEncoding = sRGBEncoding;
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoidGhyZWUuY2pzIiwic291cmNlcyI6W10sInNvdXJjZXNDb250ZW50IjpbXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IiJ9
