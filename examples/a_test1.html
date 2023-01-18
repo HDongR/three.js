@@ -37,6 +37,9 @@
 
 			import * as THREE from 'three';
 
+			import Stats from 'three/addons/libs/stats.module.js';
+			import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
+
 			import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 			import { Reflector } from 'three/addons/objects/Reflector.js';
             import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
@@ -47,13 +50,19 @@
 
 			console.log(CSG);
 			let camera, scene, renderer;
-
+			let stats;
 			let cameraControls, transformControls;
 
 			let sphereGroup, smallSphere;
 
-
-			let groupMesh, mesh1, mesh2;
+			let selectMesh;
+			let groupMesh
+			let maxHeight = 0;
+			let splitCnt = 4;
+			let sensorXList;
+			let sensorYList;
+			let sensorZList;
+			let animCount = 0;
 
 			init();
 			animate();
@@ -67,6 +76,9 @@
 				renderer.setPixelRatio( window.devicePixelRatio );
 				renderer.setSize( window.innerWidth, window.innerHeight );
 				container.appendChild( renderer.domElement );
+
+				stats = new Stats();
+				document.body.appendChild( stats.dom );
 
 				// scene
 				scene = new THREE.Scene();
@@ -109,42 +121,6 @@
 				scene.add( transformControls );
 
 				window.addEventListener( 'resize', onWindowResize );
-				
-
-				// Make 2 box meshes.. 
-
-				let meshA = new THREE.Mesh(new THREE.BoxGeometry(1,1,1));
-				let meshB = new THREE.Mesh(new THREE.BoxGeometry(1,1,1));
-				meshA.material = new THREE.MeshPhongMaterial( { color: 0xddd, transparent:true, opacity: 0.5, depthWrite: true });
-				meshB.material = new THREE.MeshPhongMaterial( { color: 0xddd, transparent:true, opacity: 0.5, depthWrite: true });
-				//offset one of the boxes by half its width..
-
-				meshB.position.add(new THREE.Vector3( 0.5, 0.5, 0.5));
-
-				//Make sure the .matrix of each mesh is current
-
-				meshA.updateMatrix();
-				meshB.updateMatrix();
-
-				//Create a bsp tree from each of the meshes
-				
-				let bspA = CSG.fromMesh( meshA );                
-				let bspB = CSG.fromMesh( meshB );
-				scene.add( meshA );
-				scene.add( meshB );
-				// Subtract one bsp from the other via .subtract... other supported modes are .union and .intersect
-				
-				let bspResult = bspA.intersect(bspB);
-				let result = CSG.toMesh( bspResult, meshA.matrix, new THREE.MeshPhongMaterial( { color: 0xff0000,transparent:true, opacity: 0.5, depthWrite: true } ));
-
-			 
-				scene.add( result );
-
-				//Get the resulting mesh from the result bsp, and assign meshA.material to the resulting mesh
-
-				let meshResult = CSG.toMesh( bspResult, meshA.matrix, meshA.material );
-
-
 
                 const objLoader = new OBJLoader();
 				const mtlLoader = new MTLLoader();
@@ -164,41 +140,59 @@
 							groupMesh = object;
 							let pos;
 							let m1Pos;
+							let maxHeightIndex = 0;
 							for(let i=0; i<object.children.length; ++i){
 								let child = object.children[i];
-
-								if(i==0)mesh1 = child;
-								if(i==1)mesh2 = child;
+								child.material = buildTwistMaterial(child.material, 2.0 );
 
 								let index = 0;
-								for(let j=0; j<child.geometry.attributes.position.count; ++j){
-
-									child.geometry.attributes.position.array[index] = child.geometry.attributes.position.array[index] - 989570.125;
+								let xTrans = (child.geometry.attributes.position.array[0] > 0 ? child.geometry.attributes.position.array[0] : child.geometry.attributes.position.array[0] * -1);
+								let yTrans = (child.geometry.attributes.position.array[1] > 0 ? child.geometry.attributes.position.array[1] : child.geometry.attributes.position.array[1] * -1);
+								let zTrans = (child.geometry.attributes.position.array[2] > 0 ? child.geometry.attributes.position.array[2] : child.geometry.attributes.position.array[2] * -1);
+								for(let j=0; j<child.geometry.attributes.position.count; ++j){ 
+									child.geometry.attributes.position.array[index] = child.geometry.attributes.position.array[index] - xTrans
 									index++;
-									child.geometry.attributes.position.array[index] = child.geometry.attributes.position.array[index] - 1816965.375;
+									child.geometry.attributes.position.array[index] = child.geometry.attributes.position.array[index] - yTrans
 									index++;
-									child.geometry.attributes.position.array[index] = child.geometry.attributes.position.array[index] - 61;
+									child.geometry.attributes.position.array[index] = child.geometry.attributes.position.array[index] - zTrans
 									index++;
 								}
 								
 								child.geometry.attributes.position.needsUpdate = true;
 								pos = getCenterPoint(child);
+
+								for(let i=0; i<object.children.length; ++i){
+									let child = object.children[i];
+									let height = getHeight(child);
+									if(height > maxHeight){
+										maxHeight = height;
+										maxHeightIndex = i;
+									}
+								}
+								
 								if(i == 0)m1Pos = pos.clone();
 								if(i > 0)child.position.x = m1Pos.x - pos.x;
 								else child.position.x = -pos.x;
 							}
 
-							
-							
-							
+							selectMesh = object.children[maxHeightIndex];
+
+							selectMesh.geometry.computeBoundingBox();
+							for(let i=0; i<object.children.length; ++i){
+								let child = object.children[i];
+								child.position.z -= selectMesh.geometry.boundingBox.min.z;  
+							}
+
+							console.log(selectMesh);
 
 							transformControls.attach( object );
 								
+							preProcess();
 						}, function (xhr) {
 							console.log( ( xhr.loaded / xhr.total * 100 ) + '% loaded' );
 
 						}, function (error) {
-							console.log( 'An error happened' );
+							console.log( 'An error happened', error);
 						});
 					
 						 
@@ -225,6 +219,130 @@
 
 			}
 
+			async function preProcess(){
+				const effectController = {
+					k_v2: 0.5,
+				};
+
+				const matChanger = function ( ) {
+					if(selectMesh){
+						const shader = selectMesh.material.userData.shader;
+						if(shader){
+							shader.uniforms.k_v2.value = effectController.k_v2;
+						}
+					}
+				};
+
+				//
+
+				const gui = new GUI();
+
+				
+				gui.add( effectController, 'k_v2', 0.1, 50.0, 0.1 ).onChange( matChanger );
+				matChanger();
+
+				let geometry = selectMesh.geometry;
+				 
+
+				/*데이터 입력*/
+				sensorXList = await getMseedData('a_test/output_CP_BEB_BCX_20221029082749.mseed');
+				sensorYList = await getMseedData('a_test/output_CP_BEB_BCY_20221029082749.mseed');
+				sensorZList = await getMseedData('a_test/output_CP_BEB_BCZ_20221029082749.mseed');
+				
+
+				/*데이터 입력 끝*/
+			}
+
+			async function getMseedData(url){
+				let res = await fetch(url);
+				let resTxt = await res.text();
+				let resList = resTxt.split(' ');
+				for(let i=0; i<resList.length; ++i){
+					resList[i] = Number(resList[i]);
+				}
+				return resList;
+			}
+
+			function makeSplitMesh() {
+				let width = 1000;
+				let height = 1000;
+				let depth = maxHeight / splitCnt
+				for(let i=0; i<splitCnt; ++i){
+					let zTrans = maxHeight * i / splitCnt;
+					let splitMesh = new THREE.Mesh(new THREE.BoxGeometry(width,height,depth));
+					splitMesh.position.z = zTrans + depth/2;
+					let color = new THREE.Color( 0xffffff );
+					color.setHex( Math.random() * 0xffffff );
+					splitMesh.material = new THREE.MeshPhongMaterial( { color, transparent:true, opacity: 0.5, depthWrite: true });
+					
+					splitMesh.updateMatrix();
+					//Create a bsp tree from each of the meshes 
+					let bsp = CSG.fromMesh( splitMesh );    
+					let selectCSGMesh = CSG.fromMesh(selectMesh);     
+					scene.add(splitMesh);
+
+					// Subtract one bsp from the other via .subtract... other supported modes are .union and .intersect
+					
+					let bspResult = bsp.intersect(selectCSGMesh);
+					let result = CSG.toMesh( bspResult, splitMesh.matrix, new THREE.MeshPhongMaterial( { color: 0xff0000,transparent:true, opacity: 0.5, depthWrite: true } ));
+
+				
+					scene.add( result );
+				}
+			}
+
+			function buildTwistMaterial( material, amount ) {
+				
+				material.onBeforeCompile = function ( shader ) {
+
+					shader.uniforms.time = { value: 0 };
+					shader.uniforms.sensor_x = { value: 0 };
+					shader.uniforms.sensor_y = { value: 0 };
+					shader.uniforms.sensor_z = { value: 0 };
+					shader.uniforms.k_v2 = { value: 0.5 };
+					/* 
+						`float theta = cos( time*5. );`,
+						'mat3 m = mat3( 1., 0, 0, 0, 1, 0, 0, 0, 1);',
+							
+						'	m = mat3( 1., 0, theta/5., 0, 1, 0, 0, 0, 1);',
+							
+						'vec3 transformed = vec3( position ) * m;'
+					*/
+					let header = `
+						uniform float time;\n
+						uniform float sensor_x;\n
+						uniform float sensor_y;\n
+						uniform float sensor_z;\n
+						uniform float k_v2;\n
+					`;
+					shader.vertexShader = header + shader.vertexShader;
+					shader.vertexShader = shader.vertexShader.replace(
+						'#include <begin_vertex>',
+						[ 
+							'float dx = sin(sensor_x / 10000.);',
+							'mat3 m = mat3( 1., 0, dx/k_v2, 0, 1., 0, 0, 0, 1.);', 
+							 
+							'vec3 transformed = vec3( position ) * m;'
+						].join( '\n' )
+					);
+
+					console.log(shader.vertexShader);
+					material.userData.shader = shader;
+
+				};
+
+				// Make sure WebGLRenderer doesnt reuse a single program
+
+				material.customProgramCacheKey = function () {
+
+					return amount;
+
+				};
+
+				return material;
+
+			}
+
 			function onWindowResize() {
 
 				camera.aspect = window.innerWidth / window.innerHeight;
@@ -237,15 +355,41 @@
 			function animate() {
 
 				requestAnimationFrame( animate );
+				
+				if(selectMesh){
+					const shader = selectMesh.material.userData.shader;
 
-				const timer = Date.now() * 0.01;
+					if ( shader && sensorXList && sensorYList && sensorZList) {
+						shader.uniforms.time.value = performance.now() / 1000;
+						
+						let xT = sensorXList[animCount];
+						let yT = sensorXList[animCount];
+						let zT = sensorXList[animCount];
 
-			 
+						shader.uniforms.sensor_x.value = xT;
+						shader.uniforms.sensor_y.value = yT;
+						shader.uniforms.sensor_z.value = zT;
 
+						animCount++;
+
+						if(animCount > sensorXList.length-1){
+							animCount = 0;
+							
+						}
+						console.log('' + animCount + '/' + sensorXList.length, xT, yT, zT);
+						
+					}
+				}
+				
 				renderer.render( scene, camera );
 				cameraControls.update();
-				//if(groupMesh && mesh1 && mesh2)
-				//	console.log(groupMesh.position, mesh1.position, mesh2.position);
+ 				stats.update();
+			}
+
+			function getHeight(mesh){
+				var geometry = mesh.geometry;
+				geometry.computeBoundingBox();
+				return geometry.boundingBox.max.z - geometry.boundingBox.min.z; //건물은 z가 0부터 시작하므로 z의 max값
 			}
 
 			function getCenterPoint(mesh) {
@@ -257,7 +401,7 @@
 				middle.x = (geometry.boundingBox.max.x + geometry.boundingBox.min.x) / 2;
 				middle.y = (geometry.boundingBox.max.y + geometry.boundingBox.min.y) / 2;
 				middle.z = (geometry.boundingBox.max.z + geometry.boundingBox.min.z) / 2;
-			
+				
 				mesh.localToWorld( middle );
 				return middle;
 			}
