@@ -13,12 +13,16 @@
 				color: #08f;
 			}
 		</style>
+
+		
+		<link rel="stylesheet" href="//code.jquery.com/ui/1.13.2/themes/base/jquery-ui.css">
+		<script src="https://code.jquery.com/jquery-3.6.0.js"></script>
+		<script src="https://code.jquery.com/ui/1.13.2/jquery-ui.js"></script>
 	</head>
 	<body>
 
 		<div id="container"></div>
-		<div id="info"><a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> - mirror
-		</div>
+	 
 
 		<!-- Import maps polyfill -->
 		<!-- Remove this when import maps will be widely supported -->
@@ -63,6 +67,13 @@
 			let sensorYList;
 			let sensorZList;
 			let animCount = 0;
+			let isSliding = false;
+			let startMinDateGlobal = 0;
+			let hz = 20.0; //20hz
+			const clock = new THREE.Clock();
+
+			let infoView = undefined;
+			let timeStepSlider = undefined;
 
 			init();
 			animate();
@@ -142,19 +153,48 @@
 							let m1Pos;
 							let maxHeightIndex = 0;
 							for(let i=0; i<object.children.length; ++i){
+								if(i>0)continue;
 								let child = object.children[i];
 								child.material = buildTwistMaterial(child.material, 2.0 );
 
-								let index = 0;
-								let xTrans = (child.geometry.attributes.position.array[0] > 0 ? child.geometry.attributes.position.array[0] : child.geometry.attributes.position.array[0] * -1);
-								let yTrans = (child.geometry.attributes.position.array[1] > 0 ? child.geometry.attributes.position.array[1] : child.geometry.attributes.position.array[1] * -1);
-								let zTrans = (child.geometry.attributes.position.array[2] > 0 ? child.geometry.attributes.position.array[2] : child.geometry.attributes.position.array[2] * -1);
+								let index = 0; 
+								let minX = Number.POSITIVE_INFINITY;
+								let minY = Number.POSITIVE_INFINITY;
+								let minZ = Number.POSITIVE_INFINITY;
+								let maxX = Number.NEGATIVE_INFINITY;
+								let maxY = Number.NEGATIVE_INFINITY;
+								let maxZ = Number.NEGATIVE_INFINITY;
 								for(let j=0; j<child.geometry.attributes.position.count; ++j){ 
-									child.geometry.attributes.position.array[index] = child.geometry.attributes.position.array[index] - xTrans
+									let _x = child.geometry.attributes.position.array[index];
 									index++;
-									child.geometry.attributes.position.array[index] = child.geometry.attributes.position.array[index] - yTrans
+									let _y = child.geometry.attributes.position.array[index];
 									index++;
-									child.geometry.attributes.position.array[index] = child.geometry.attributes.position.array[index] - zTrans
+									let _z = child.geometry.attributes.position.array[index];
+									index++;
+
+									minX = Math.min(minX, _x);
+									minY = Math.min(minY, _y);
+									minZ = Math.min(minZ, _z);
+									maxX = Math.max(maxX, _x);
+									maxY = Math.max(maxY, _y);
+									maxZ = Math.max(maxZ, _z); 
+								}
+					 
+								let width = maxX - minX;
+								let height = maxY - minY;
+								let depth = maxZ - minZ;
+
+								index = 0;
+								
+								for(let j=0; j<child.geometry.attributes.position.count; ++j){
+									let transX = child.geometry.attributes.position.array[index] - maxX + (width/2);
+									child.geometry.attributes.position.array[index] = transX;
+									index++;
+									let transY = child.geometry.attributes.position.array[index] - maxY + (height/2);
+									child.geometry.attributes.position.array[index] = transY;
+									index++;
+									let transZ = child.geometry.attributes.position.array[index] - maxZ + (depth/2);
+									child.geometry.attributes.position.array[index] = transZ;
 									index++;
 								}
 								
@@ -190,30 +230,20 @@
 							preProcess();
 						}, function (xhr) {
 							console.log( ( xhr.loaded / xhr.total * 100 ) + '% loaded' );
-
 						}, function (error) {
 							console.log( 'An error happened', error);
 						});
-					
-						 
-                        
                     },
                     // called when loading is in progresses
                     function ( xhr ) {
-
-                      
 						// 로드되는 동안 호출되는 함수
 						console.log('MTLLoader: ', xhr.loaded / xhr.total * 100, '% loaded');
                     },
                     // called when loading has errors
                     function ( error ) {
-						
 						// 로드가 실패했을때 호출하는 함수
 						console.error('MTLLoader 로드 중 오류가 발생하였습니다.', error);
 						alert('MTLLoader 로드 중 오류가 발생하였습니다.');
-
-                      
-
                     }
                 );
 
@@ -232,12 +262,8 @@
 						}
 					}
 				};
-
-				//
-
-				const gui = new GUI();
-
 				
+				const gui = new GUI();
 				gui.add( effectController, 'k_v2', 0.1, 50.0, 0.1 ).onChange( matChanger );
 				matChanger();
 
@@ -249,8 +275,112 @@
 				sensorYList = await getMseedData('a_test/output_CP_BEB_BCY_20221029082749.mseed');
 				sensorZList = await getMseedData('a_test/output_CP_BEB_BCZ_20221029082749.mseed');
 				
+				/*앞뒤로 누락된 데이터를 0으로 채워준다 start*/
+				
+				//UTC(universal time coordinated)->KST(korea standard time)
+				let startDateX = 1666967236200 + 9 * 60 * 60 * 1000;
+				let startDateY = 1666967236800 + 9 * 60 * 60 * 1000;
+				let startDateZ = 1666967235400 + 9 * 60 * 60 * 1000;
+				
+				let sec1 = sensorXList.length / hz;
+				let sec2 = sensorYList.length / hz;
+				let sec3 = sensorZList.length / hz;
 
-				/*데이터 입력 끝*/
+				let endDateX = startDateX + sec1 * 1000;
+				let endDateY = startDateY + sec2 * 1000;
+				let endDateZ = startDateZ + sec3 * 1000;
+
+				let startMinDate = Math.min(startDateX, startDateY, startDateZ);
+				startMinDateGlobal = startMinDate;
+				let endMaxDate = Math.max(endDateX, endDateY, endDateZ);
+ 
+				let startOffsetX = startMinDate - startDateX; 
+				let endOffsetX = endMaxDate - endDateX;
+				let startOffsetY = startMinDate - startDateY;
+				let endOffsetY = endMaxDate - endDateY;
+				let startOffsetZ = startMinDate - startDateZ;
+				let endOffsetZ = endMaxDate - endDateZ;
+
+				let addedStartXDate = startDateX + startOffsetX;
+				let addedStartYDate = startDateY + startOffsetY;
+				let addedStartZDate = startDateZ + startOffsetZ;
+
+				let addedEndXDate = endDateX + endOffsetX;
+				let addedEndYDate = endDateY + endOffsetY;
+				let addedEndZDate = endDateZ + endOffsetZ;
+
+				let addedStartXCnt = Math.abs(startOffsetX / 1000 * hz);
+				let addedStartYCnt = Math.abs(startOffsetY / 1000 * hz);
+				let addedStartZCnt = Math.abs(startOffsetZ / 1000 * hz);
+				let addedEndXCnt = Math.abs(endOffsetX / 1000 * hz);
+				let addedEndYCnt = Math.abs(endOffsetY / 1000 * hz);
+				let addedEndZCnt = Math.abs(endOffsetZ / 1000 * hz);
+
+				function addStartPos(cnt, list){
+					for(let i=0; i<cnt; ++i){
+						list.unshift(0);
+					}
+				}
+				function addEndPos(cnt, list){
+					for(let i=0; i<cnt; ++i){
+						list.push(0);
+					}
+				}
+				
+				addStartPos(addedStartXCnt, sensorXList);
+				addStartPos(addedStartYCnt, sensorYList);
+				addStartPos(addedStartZCnt, sensorZList);
+				addEndPos(addedEndXCnt, sensorXList);
+				addEndPos(addedEndYCnt, sensorYList);
+				addEndPos(addedEndZCnt, sensorZList);
+ 				/*앞뒤로 누락된 데이터를 0으로 채워준다 end*/
+
+				/*playbar 생성*/
+				$('body').append(`
+					<div class="" style="position: fixed;
+					left: 10%;
+					top:60%;
+					width: 80%;
+					box-sizing: border-box;
+					z-index:2 !important;; /* TODO Solve this in HTML */
+					background:#fff">
+						 <span id="xyzInfo" style="margin-left:100px; width:500px;"></span>
+						 <div id="timeStepSlider"></div>
+						 <button id="junkButton">junk</button>
+						 <span id="junkResult"></span>
+					</div>
+				`);
+				infoView = $('#xyzInfo');
+				$("#timeStepSlider").slider({
+					range: "min",
+					step: 10,
+					value: startMinDate,
+					min: startMinDate,
+					max: endMaxDate - 100,
+					slide: function (event, ui) {
+						//$('#timeStepValue').text(new Date(ui.value));
+						let diffTime = ui.value - startMinDate;
+						animCount = Math.round(diffTime/1000*hz);
+						//$('#timeXYZ').text('x:'+sensorXList[animCount]+' y:'+sensorYList[animCount]+' z:'+sensorZList[animCount]);
+					},
+					start: function(event, ui){
+						isSliding = true;
+					},
+					stop: function(event, ui){
+						isSliding = false;
+					},
+				});
+				timeStepSlider = $("#timeStepSlider");
+				/*playbar 생성 끝/
+
+				/*데이터 입력 끝*/ 
+
+				postProcess();
+			}
+			
+			function postProcess(){
+				
+				initJank();
 			}
 
 			async function getMseedData(url){
@@ -262,34 +392,7 @@
 				}
 				return resList;
 			}
-
-			function makeSplitMesh() {
-				let width = 1000;
-				let height = 1000;
-				let depth = maxHeight / splitCnt
-				for(let i=0; i<splitCnt; ++i){
-					let zTrans = maxHeight * i / splitCnt;
-					let splitMesh = new THREE.Mesh(new THREE.BoxGeometry(width,height,depth));
-					splitMesh.position.z = zTrans + depth/2;
-					let color = new THREE.Color( 0xffffff );
-					color.setHex( Math.random() * 0xffffff );
-					splitMesh.material = new THREE.MeshPhongMaterial( { color, transparent:true, opacity: 0.5, depthWrite: true });
-					
-					splitMesh.updateMatrix();
-					//Create a bsp tree from each of the meshes 
-					let bsp = CSG.fromMesh( splitMesh );    
-					let selectCSGMesh = CSG.fromMesh(selectMesh);     
-					scene.add(splitMesh);
-
-					// Subtract one bsp from the other via .subtract... other supported modes are .union and .intersect
-					
-					let bspResult = bsp.intersect(selectCSGMesh);
-					let result = CSG.toMesh( bspResult, splitMesh.matrix, new THREE.MeshPhongMaterial( { color: 0xff0000,transparent:true, opacity: 0.5, depthWrite: true } ));
-
-				
-					scene.add( result );
-				}
-			}
+ 
 
 			function buildTwistMaterial( material, amount ) {
 				
@@ -308,6 +411,13 @@
 							
 						'vec3 transformed = vec3( position ) * m;'
 					*/
+
+					/*
+						'float dx = sin(sensor_x / 10000.);',
+						'mat3 m = mat3( 1., 0, dx/k_v2, 0, 1., 0, 0, 0, 1.);', 
+							
+						'vec3 transformed = vec3( position ) * m;'
+					*/
 					let header = `
 						uniform float time;\n
 						uniform float sensor_x;\n
@@ -320,8 +430,9 @@
 						'#include <begin_vertex>',
 						[ 
 							'float dx = sin(sensor_x / 10000.);',
-							'mat3 m = mat3( 1., 0, dx/k_v2, 0, 1., 0, 0, 0, 1.);', 
-							 
+							'float dy = sin(sensor_y / 10000.);',
+							'float dz = sin(sensor_y / 10000.);',
+							'mat3 m = mat3( 1., 0., dx/k_v2, 0, 1., 0, 0, 0, 1.);',
 							'vec3 transformed = vec3( position ) * m;'
 						].join( '\n' )
 					);
@@ -352,38 +463,82 @@
 
 			}
 
+			var framecnt = 0;
+			var sumFrame = 0;
+			var t_privouseTime = 0;
+			var t_currentTime = 0;
+			var t_diffTime = 0;
+
 			function animate() {
 
 				requestAnimationFrame( animate );
+				t_privouseTime = t_currentTime;
+
+				let timeDelta = clock.getDelta();
+				sumFrame += timeDelta;
+				if(sumFrame > 1.0){
+					console.log(framecnt);
+					console.log(sumFrame);
+					framecnt = 0;
+					sumFrame = 0;
+				}
+				framecnt++;
+			
 				
 				if(selectMesh){
 					const shader = selectMesh.material.userData.shader;
 
 					if ( shader && sensorXList && sensorYList && sensorZList) {
-						shader.uniforms.time.value = performance.now() / 1000;
+						let currentTime = startMinDateGlobal + (animCount * 1/hz * 1000);
+						t_currentTime = currentTime;
+						t_diffTime = currentTime - t_privouseTime;
+						if(t_diffTime < 1000){
+							//console.log(t_diffTime);
+						}
+
+
+						shader.uniforms.time.value = timeDelta;
 						
 						let xT = sensorXList[animCount];
-						let yT = sensorXList[animCount];
-						let zT = sensorXList[animCount];
+						let yT = sensorYList[animCount];
+						let zT = sensorZList[animCount];
 
 						shader.uniforms.sensor_x.value = xT;
 						shader.uniforms.sensor_y.value = yT;
 						shader.uniforms.sensor_z.value = zT;
+						
+						//console.log('' + animCount + '/' + sensorXList.length, xT, yT, zT);
+						
 
-						animCount++;
+						if(infoView){
+						
+							timeStepSlider.slider('value',currentTime);
+							infoView.text(''+ new Date(currentTime) + ' 진행:'+ (animCount/sensorXList.length*100).toFixed(2) + '% ' + '    ' + animCount + '/' + sensorXList.length + '     x:'+xT+'     y:'+yT+'     z:'+zT);
+
+						}
+
+						
+
+						if(!isSliding){
+							animCount++;
+						}
 
 						if(animCount > sensorXList.length-1){
 							animCount = 0;
 							
 						}
-						console.log('' + animCount + '/' + sensorXList.length, xT, yT, zT);
 						
 					}
 				}
 				
+				
 				renderer.render( scene, camera );
 				cameraControls.update();
- 				stats.update();
+				stats.update();
+	 
+
+
+				
 			}
 
 			function getHeight(mesh){
@@ -406,6 +561,49 @@
 				return middle;
 			}
 
+			let interval = null;
+			let result = null;
+
+			function initJank() {
+
+				const button = document.getElementById( 'junkButton' );
+				button.addEventListener( 'click', function () {
+
+					if ( interval === null ) {
+
+						interval = setInterval( jank, 1000 / 60 );
+
+						button.textContent = 'STOP JANK';
+
+					} else {
+
+						clearInterval( interval );
+						interval = null;
+
+						button.textContent = 'START JANK';
+						result.textContent = '';
+
+					}
+
+				} );
+
+				result = document.getElementById( 'junkResult' );
+
+			}
+
+			function jank() {
+
+				let number = 0;
+
+				for ( let i = 0; i < 10000000; i ++ ) {
+
+					number += Math.random();
+
+				}
+
+				result.textContent = number;
+
+			}
 		</script>
 	</body>
 </html>
