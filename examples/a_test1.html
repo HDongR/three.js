@@ -69,11 +69,19 @@
 			let animCount = 0;
 			let isSliding = false;
 			let startMinDateGlobal = 0;
-			let hz = 20.0; //20hz
+			let hz = 100.0; //20hz
 			const clock = new THREE.Clock();
 
 			let infoView = undefined;
 			let timeStepSlider = undefined;
+
+			let framecnt = 0;
+			let sumFrame = 0;
+			let t_privouseTime = 0;
+			let t_currentTime = Number.POSITIVE_INFINITY;
+			let t_diffTime = 0;
+			let speedAnim = 20;
+			let isOriginSpeed = true;
 
 			init();
 			animate();
@@ -271,16 +279,22 @@
 				 
 
 				/*데이터 입력*/
-				sensorXList = await getMseedData('a_test/output_CP_BEB_BCX_20221029082749.mseed');
-				sensorYList = await getMseedData('a_test/output_CP_BEB_BCY_20221029082749.mseed');
-				sensorZList = await getMseedData('a_test/output_CP_BEB_BCZ_20221029082749.mseed');
+				sensorXList = await getMseedData('a_test/output_CP_BEB_HCX_20221029082749.mseed');
+				sensorYList = await getMseedData('a_test/output_CP_BEB_HCY_20221029082749.mseed');
+				sensorZList = await getMseedData('a_test/output_CP_BEB_HCZ_20221029082749.mseed');
 				
 				/*앞뒤로 누락된 데이터를 0으로 채워준다 start*/
 				
 				//UTC(universal time coordinated)->KST(korea standard time)
+				/* 20 hz
 				let startDateX = 1666967236200 + 9 * 60 * 60 * 1000;
 				let startDateY = 1666967236800 + 9 * 60 * 60 * 1000;
 				let startDateZ = 1666967235400 + 9 * 60 * 60 * 1000;
+				*/
+				//100 hz
+				let startDateX = 1666967237680 + 9 * 60 * 60 * 1000;
+				let startDateY = 1666967237440 + 9 * 60 * 60 * 1000;
+				let startDateZ = 1666967238060 + 9 * 60 * 60 * 1000;
 				
 				let sec1 = sensorXList.length / hz;
 				let sec2 = sensorYList.length / hz;
@@ -348,6 +362,7 @@
 						 <div id="timeStepSlider"></div>
 						 <button id="junkButton">junk</button>
 						 <span id="junkResult"></span>
+						 <button id="outputCsvButton">outputCSV</button>
 					</div>
 				`);
 				infoView = $('#xyzInfo');
@@ -360,7 +375,7 @@
 					slide: function (event, ui) {
 						//$('#timeStepValue').text(new Date(ui.value));
 						let diffTime = ui.value - startMinDate;
-						animCount = Math.round(diffTime/1000*hz);
+						animCount = Math.floor(diffTime/1000*hz);
 						//$('#timeXYZ').text('x:'+sensorXList[animCount]+' y:'+sensorYList[animCount]+' z:'+sensorZList[animCount]);
 					},
 					start: function(event, ui){
@@ -381,6 +396,7 @@
 			function postProcess(){
 				
 				initJank();
+				initOutputCsv();
 			}
 
 			async function getMseedData(url){
@@ -432,7 +448,7 @@
 							'float dx = sin(sensor_x / 10000.);',
 							'float dy = sin(sensor_y / 10000.);',
 							'float dz = sin(sensor_y / 10000.);',
-							'mat3 m = mat3( 1., 0., dx/k_v2, 0, 1., 0, 0, 0, 1.);',
+							'mat3 m = mat3( 1., 0., dx/k_v2, 0, 1., dy/k_v2, dz/k_v2, 0, 1.);',
 							'vec3 transformed = vec3( position ) * m;'
 						].join( '\n' )
 					);
@@ -463,11 +479,7 @@
 
 			}
 
-			var framecnt = 0;
-			var sumFrame = 0;
-			var t_privouseTime = 0;
-			var t_currentTime = 0;
-			var t_diffTime = 0;
+
 
 			function animate() {
 
@@ -477,8 +489,8 @@
 				let timeDelta = clock.getDelta();
 				sumFrame += timeDelta;
 				if(sumFrame > 1.0){
-					console.log(framecnt);
-					console.log(sumFrame);
+					//console.log(framecnt);
+					//console.log(sumFrame);
 					framecnt = 0;
 					sumFrame = 0;
 				}
@@ -498,10 +510,10 @@
 
 
 						shader.uniforms.time.value = timeDelta;
-						
-						let xT = sensorXList[animCount];
-						let yT = sensorYList[animCount];
-						let zT = sensorZList[animCount];
+						let _animCount = Math.floor(animCount);
+						let xT = sensorXList[_animCount];
+						let yT = sensorYList[_animCount];
+						let zT = sensorZList[_animCount];
 
 						shader.uniforms.sensor_x.value = xT;
 						shader.uniforms.sensor_y.value = yT;
@@ -513,14 +525,24 @@
 						if(infoView){
 						
 							timeStepSlider.slider('value',currentTime);
-							infoView.text(''+ new Date(currentTime) + ' 진행:'+ (animCount/sensorXList.length*100).toFixed(2) + '% ' + '    ' + animCount + '/' + sensorXList.length + '     x:'+xT+'     y:'+yT+'     z:'+zT);
+							infoView.text(''+ new Date(currentTime).toISOString() + ' 진행:'+ (_animCount/sensorXList.length*100).toFixed(2) + '% ' + '    ' + _animCount + '/' + sensorXList.length + '     x:'+xT+'     y:'+yT+'     z:'+zT);
 
 						}
 
 						
 
 						if(!isSliding){
-							animCount++;
+							//animCount++;
+							if(t_diffTime <= hz - 0.05 && t_diffTime > hz + 0.05){
+								animCount = animCount + timeDelta * speedAnim;
+							}else if(t_diffTime < hz - 0.05){
+								speedAnim += 1;
+								animCount = animCount + timeDelta * speedAnim;
+							}else if(t_diffTime >= hz + 0.05){
+								speedAnim -= 1;
+								animCount = animCount + timeDelta * speedAnim;
+							}
+							
 						}
 
 						if(animCount > sensorXList.length-1){
@@ -603,6 +625,28 @@
 
 				result.textContent = number;
 
+			}
+
+			function initOutputCsv(){
+				$('#outputCsvButton').click(()=>{
+					let rows = [
+						["StartTime", "Hz", "SampleRate", "x", "y", "z"],
+					];
+					rows.push([new Date(startMinDateGlobal).toISOString(), String(hz), String(sensorXList.length), '', '', '']);
+					for(let i=0; i<sensorXList.length; ++i){
+						rows.push(['', '', '', String(sensorXList[i]), String(sensorYList[i]), String(sensorZList[i])]);
+					}
+
+					let csvContent = "data:text/csv;charset=utf-8,";
+
+					rows.forEach(function(rowArray) {
+						let row = rowArray.join(",");
+						csvContent += row + "\r\n";
+					});
+
+					var encodedUri = encodeURI(csvContent);
+					window.open(encodedUri);
+				});
 			}
 		</script>
 	</body>
