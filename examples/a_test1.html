@@ -18,6 +18,9 @@
 		<link rel="stylesheet" href="//code.jquery.com/ui/1.13.2/themes/base/jquery-ui.css">
 		<script src="https://code.jquery.com/jquery-3.6.0.js"></script>
 		<script src="https://code.jquery.com/ui/1.13.2/jquery-ui.js"></script>
+		<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+		<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+		<script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
 	</head>
 	<body>
 
@@ -38,6 +41,23 @@
 		</script>
 
 		<script type="module">
+			let uiHTML = `
+				<div class="" style="position: fixed;
+					left: 10%;
+					top:60%;
+					width: 80%;
+					box-sizing: border-box;
+					z-index:2 !important;; /* TODO Solve this in HTML */
+					background:#fff">
+						<span id="xyzInfo" style="margin-left:100px; width:500px;"></span>
+						<div id="timeStepSlider"></div>
+						<button id="junkButton">junk</button>
+						<span id="junkResult"></span>
+						<button id="outputCsvButton">outputCSV</button>
+						<div id="myChart">
+						</div>
+				</div>
+			`;
 
 			import * as THREE from 'three';
 
@@ -350,21 +370,7 @@
  				/*앞뒤로 누락된 데이터를 0으로 채워준다 end*/
 
 				/*playbar 생성*/
-				$('body').append(`
-					<div class="" style="position: fixed;
-					left: 10%;
-					top:60%;
-					width: 80%;
-					box-sizing: border-box;
-					z-index:2 !important;; /* TODO Solve this in HTML */
-					background:#fff">
-						 <span id="xyzInfo" style="margin-left:100px; width:500px;"></span>
-						 <div id="timeStepSlider"></div>
-						 <button id="junkButton">junk</button>
-						 <span id="junkResult"></span>
-						 <button id="outputCsvButton">outputCSV</button>
-					</div>
-				`);
+				$('body').append(uiHTML);
 				infoView = $('#xyzInfo');
 				$("#timeStepSlider").slider({
 					range: "min",
@@ -397,7 +403,148 @@
 				
 				initJank();
 				initOutputCsv();
+				initChartUI(sensorXList);
 			}
+
+			function initChartUI(sensorListParam){
+				let sensorList = sensorListParam;
+	  
+				let width = $('#timeStepSlider').width();
+				let height = 300;
+
+				let chart_offset_top = 20;
+				let chart_offset_bottom = 20;
+				let chart_offset_left = 20;
+				let chart_offset_right = 20;
+				
+				let chart_10000_offset = height / 5;
+
+				let added_left_offset = 30;
+				let start_x_offset = chart_offset_left + added_left_offset;
+				let font_height = 4;
+
+				let chartWidth = width - start_x_offset - chart_offset_right;
+				let chartHeight = height - chart_offset_top - chart_offset_bottom;
+
+				let zero_pos_x = start_x_offset;
+				let zero_pos_y = height/2;
+				
+				let _10000 =
+
+				$('#myChart').append(`
+				<canvas id="myChartCanvas1" style="background: cornsilk;position:absolute;" width="${width}" height="${height}"></canvas>
+				<canvas id="myChartCanvas2" style="position:absolute;" width="${width}" height="${height}"></canvas>
+				<canvas id="myChartCanvas3" style="position:absolute;" width="${width}" height="${height}"></canvas>
+				 
+				`);
+			
+				let canvas1 = document.getElementById("myChartCanvas1");
+				let ctx1 = canvas1.getContext("2d");
+				
+				let canvas2 = document.getElementById("myChartCanvas2");
+				let ctx2 = canvas2.getContext("2d");
+
+				let canvas3 = document.getElementById("myChartCanvas3");
+				let ctx3 = canvas3.getContext("2d");
+
+ 
+
+				function drawChartSetting(context){
+					context.moveTo(width - chart_offset_right, chart_offset_top);
+					context.lineTo(width - chart_offset_right, height - chart_offset_bottom);
+	
+					context.moveTo(start_x_offset, height - chart_offset_bottom);
+					context.lineTo(start_x_offset, chart_offset_top);
+	
+					context.moveTo(start_x_offset, height/2);
+					context.lineTo(width - chart_offset_right, height/2);
+					
+					context.font = "12px serif";
+					context.fillText("10000", chart_offset_left - 2, zero_pos_y - chart_10000_offset + font_height/2);
+					context.fillText("0", start_x_offset - 10, height/2 + font_height/2);
+					context.fillText("-10000", chart_offset_left - 10, zero_pos_y + chart_10000_offset + font_height/2);
+					
+				}
+				drawChartSetting(ctx2);
+				
+
+				let x_axis_start_value = startMinDateGlobal;
+				let x_axis_end_value = startMinDateGlobal + ((sensorList.length-1) * 1/hz * 1000);
+				
+
+				function drawChartData(context){
+					for(let i=0; i<sensorList.length-1; ++i){
+						let xPos = zero_pos_x + chartWidth * (i / sensorList.length);
+						let yPos = zero_pos_y - ((chart_10000_offset*sensorList[i]) / 10000.0);
+	
+						let next_xPos = zero_pos_x + chartWidth * ((i+1) / sensorList.length);
+						let next_yPos = zero_pos_y - ((chart_10000_offset*sensorList[i+1]) / 10000.0);
+						context.moveTo(xPos, yPos);
+						context.lineTo(next_xPos, next_yPos);
+						
+						/*dot*/
+						//ctx.beginPath();
+						//ctx.arc(xPos, yPos, 1, 0, 2 * Math.PI, true);
+						//ctx.fill();
+					}
+					
+				
+				}
+				drawChartData(ctx2);
+
+				function crosshair(context, mouseX, mouseY, clientX, clientY){
+					/*clear context*/
+					context.clearRect(0, 0, width, height);
+					context.beginPath();
+					
+					if(mouseX < zero_pos_x || zero_pos_x + chartWidth < mouseX){
+						return;
+					}
+
+					/*y축 그리기*/
+					context.setLineDash([5, 10]);
+					context.moveTo(mouseX, 0);
+					context.lineTo(mouseX, height);
+					context.strokeStyle = '#ff00ff';
+
+					/*x축 그리기*/
+					let x = mouseX - zero_pos_x;
+					let sensorDataIdx = (x*sensorList.length) / chartWidth;
+					let sensorData = sensorList[Math.round(sensorDataIdx)];
+					let y = zero_pos_y - ((chart_10000_offset*sensorData) / 10000.0);
+					context.moveTo(zero_pos_x, y);
+					context.lineTo(zero_pos_x + chartWidth, y);
+
+					/*dot point 그리기*/
+					context.fillStyle = '#ff00ff';
+					context.arc(mouseX, y, 3, 0, 2 * Math.PI, true);
+					context.fill();
+
+					/*label*/
+					context.font = "12px serif";
+					let s_sensorData = String(sensorData);
+					let measure = context.measureText(s_sensorData);
+					context.fillText(s_sensorData,mouseX - 20, mouseY);
+					
+					context.stroke();
+					context.globalCompositeOperation = 'source-over';
+				}
+
+				$('#myChartCanvas3').mousemove(e=>{
+					let offsetX = e.originalEvent.offsetX;
+					let offsetY = e.originalEvent.offsetY
+					let clientX = e.originalEvent.clientX;
+					let clientY = e.originalEvent.clientY;
+					crosshair(ctx3, offsetX, offsetY, clientX, clientY);
+				});
+
+				ctx2.stroke();
+
+				ctx1.drawImage(canvas2, 0, 0);
+				ctx1.drawImage(canvas3, 0, 0);
+			}
+
+			 
 
 			async function getMseedData(url){
 				let res = await fetch(url);
@@ -536,10 +683,10 @@
 							if(t_diffTime <= hz - 0.05 && t_diffTime > hz + 0.05){
 								animCount = animCount + timeDelta * speedAnim;
 							}else if(t_diffTime < hz - 0.05){
-								speedAnim += 1;
+								speedAnim += 0.01;
 								animCount = animCount + timeDelta * speedAnim;
 							}else if(t_diffTime >= hz + 0.05){
-								speedAnim -= 1;
+								speedAnim -= 0.01;
 								animCount = animCount + timeDelta * speedAnim;
 							}
 							
