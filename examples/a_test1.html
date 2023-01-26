@@ -103,6 +103,8 @@
 			let speedAnim = 20;
 			let isOriginSpeed = true;
 
+			const windowsChrome = isChromiumBased() && isWindows();
+
 			init();
 			animate();
 
@@ -407,7 +409,7 @@
 			}
 
 			function initChartUI(sensorListParam){
-				let sensorList = sensorListParam;
+				let sensorList = sensorListParam.slice();
 	  
 				let width = $('#timeStepSlider').width();
 				let height = 300;
@@ -421,7 +423,7 @@
 
 				let added_left_offset = 30;
 				let start_x_offset = chart_offset_left + added_left_offset;
-				let font_height = 4;
+				let font_height = 8;
 
 				let chartWidth = width - start_x_offset - chart_offset_right;
 				let chartHeight = height - chart_offset_top - chart_offset_bottom;
@@ -435,6 +437,7 @@
 				<canvas id="myChartCanvas1" style="background: cornsilk;position:absolute;" width="${width}" height="${height}"></canvas>
 				<canvas id="myChartCanvas2" style="position:absolute;" width="${width}" height="${height}"></canvas>
 				<canvas id="myChartCanvas3" style="position:absolute;" width="${width}" height="${height}"></canvas>
+				<canvas id="myChartCanvas4" style="position:absolute;" width="${width}" height="${height}"></canvas>
 				 
 				`);
 			
@@ -447,9 +450,19 @@
 				let canvas3 = document.getElementById("myChartCanvas3");
 				let ctx3 = canvas3.getContext("2d");
 
- 
+				let canvas4 = document.getElementById("myChartCanvas4");
+				let ctx4 = canvas4.getContext("2d");
+
+				function draw(){
+					ctx1.drawImage(canvas2, 0, 0);
+					ctx1.drawImage(canvas3, 0, 0);
+					ctx1.drawImage(canvas4, 0, 0);
+				}
 
 				function drawChartSetting(context){
+					context.clearRect(0, 0, width, height);
+					context.beginPath();
+
 					context.moveTo(width - chart_offset_right, chart_offset_top);
 					context.lineTo(width - chart_offset_right, height - chart_offset_bottom);
 	
@@ -464,6 +477,7 @@
 					context.fillText("0", start_x_offset - 10, height/2 + font_height/2);
 					context.fillText("-10000", chart_offset_left - 10, zero_pos_y + chart_10000_offset + font_height/2);
 					
+					context.stroke();
 				}
 				drawChartSetting(ctx2);
 				
@@ -472,13 +486,17 @@
 				let x_axis_end_value = startMinDateGlobal + ((sensorList.length-1) * 1/hz * 1000);
 				
 
-				function drawChartData(context){
-					for(let i=0; i<sensorList.length-1; ++i){
-						let xPos = zero_pos_x + chartWidth * (i / sensorList.length);
-						let yPos = zero_pos_y - ((chart_10000_offset*sensorList[i]) / 10000.0);
+				function drawChartData(context, dataList){
+					sensorList = dataList;
+					context.clearRect(0, 0, width, height);
+					context.beginPath();
+
+					for(let i=0; i<dataList.length-1; ++i){
+						let xPos = zero_pos_x + chartWidth * (i / dataList.length);
+						let yPos = zero_pos_y - ((chart_10000_offset*dataList[i]) / 10000.0);
 	
-						let next_xPos = zero_pos_x + chartWidth * ((i+1) / sensorList.length);
-						let next_yPos = zero_pos_y - ((chart_10000_offset*sensorList[i+1]) / 10000.0);
+						let next_xPos = zero_pos_x + chartWidth * ((i+1) / dataList.length);
+						let next_yPos = zero_pos_y - ((chart_10000_offset*dataList[i+1]) / 10000.0);
 						context.moveTo(xPos, yPos);
 						context.lineTo(next_xPos, next_yPos);
 						
@@ -487,10 +505,9 @@
 						//ctx.arc(xPos, yPos, 1, 0, 2 * Math.PI, true);
 						//ctx.fill();
 					}
-					
-				
+					context.stroke();
 				}
-				drawChartData(ctx2);
+				drawChartData(ctx3, sensorList);
 
 				function crosshair(context, mouseX, mouseY, clientX, clientY){
 					/*clear context*/
@@ -510,38 +527,96 @@
 					/*x축 그리기*/
 					let x = mouseX - zero_pos_x;
 					let sensorDataIdx = (x*sensorList.length) / chartWidth;
-					let sensorData = sensorList[Math.round(sensorDataIdx)];
+					let f_sensorIdx = Math.floor(sensorDataIdx);
+					let sensorData = sensorList[f_sensorIdx];
+					let sensorData2 = sensorList[f_sensorIdx+1];
+
 					let y = zero_pos_y - ((chart_10000_offset*sensorData) / 10000.0);
-					context.moveTo(zero_pos_x, y);
-					context.lineTo(zero_pos_x + chartWidth, y);
+					let y2 = zero_pos_y - ((chart_10000_offset*sensorData2) / 10000.0);
+					
+					let decimalPointBelow = sensorDataIdx - f_sensorIdx;
+					let dy = THREE.MathUtils.lerp(y, y2, decimalPointBelow);
+					let sensorData_delta = THREE.MathUtils.lerp(sensorData, sensorData2, decimalPointBelow);
+
+					context.moveTo(zero_pos_x, dy);
+					context.lineTo(zero_pos_x + chartWidth, dy);
 
 					/*dot point 그리기*/
 					context.fillStyle = '#ff00ff';
-					context.arc(mouseX, y, 3, 0, 2 * Math.PI, true);
+					context.arc(mouseX, dy, 3, 0, 2 * Math.PI, true);
 					context.fill();
 
 					/*label*/
 					context.font = "12px serif";
-					let s_sensorData = String(sensorData);
+					let s_sensorData = sensorData_delta.toFixed(2);
 					let measure = context.measureText(s_sensorData);
 					context.fillText(s_sensorData,mouseX - 20, mouseY);
 					
 					context.stroke();
-					context.globalCompositeOperation = 'source-over';
 				}
 
-				$('#myChartCanvas3').mousemove(e=>{
-					let offsetX = e.originalEvent.offsetX;
-					let offsetY = e.originalEvent.offsetY
-					let clientX = e.originalEvent.clientX;
-					let clientY = e.originalEvent.clientY;
-					crosshair(ctx3, offsetX, offsetY, clientX, clientY);
-				});
+				/*마우스 크로스 오버 생성 이벤트*/
+				canvas4.addEventListener('mousemove',(event=>{
+					crosshair(ctx4, event.offsetX, event.offsetY, event.clientX, event.clientY);
+				}));
+				
+				let c_time = 0;
+				function wheelEvent(context, event){
+					if(event.offsetX < zero_pos_x || zero_pos_x + chartWidth < event.offsetX){
+						return;
+					}
 
-				ctx2.stroke();
+					if (event.deltaX === 0 && event.deltaY === 0) {
+						return;
+					}
+			
+					const scrollSpeedAdjustment = _determineWheelSpeedAdjustment(event);
+			
+					const deltaX = scrollSpeedAdjustment * event.deltaX / 100;
+					const deltaY = -(scrollSpeedAdjustment * event.deltaY / 100);
+			
+					if (event.cancelable) {
+						event.preventDefault();
+					}
+			
+					if (deltaY !== 0) {
+						const zoomScale = Math.sign(deltaY) * Math.min(1, Math.abs(deltaY));
+						const scrollPosition = event.clientX - canvas3.getBoundingClientRect().left;
+						
+						let x = event.offsetX - zero_pos_x;
+						let sensorDataIdx = (x*sensorList.length) / chartWidth;
+						 
+						let displayLen = Math.floor(sensorList.length - (sensorList.length * zoomScale));
+						
+						if(sensorXList.length < displayLen){
+							return;
+						}
 
-				ctx1.drawImage(canvas2, 0, 0);
-				ctx1.drawImage(canvas3, 0, 0);
+						let leftP = sensorDataIdx/sensorList.length;
+						let t1 = displayLen * leftP;
+						let t2 = displayLen - t1;
+						
+
+						let zoomDataList = sensorList.slice(Math.ceil(sensorDataIdx - t1), Math.ceil(sensorDataIdx + t2));
+						drawChartData(ctx3, zoomDataList);
+						crosshair(ctx4, event.offsetX, event.offsetY, event.clientX, event.clientY);
+						//console.log(zoomDateCount, sensorData, sensorDataIdx, sensorList);
+						
+						//scrollPosition, zoomScale 
+					}
+				}
+				 
+				let testCnt = 0;
+				/*줌인 이벤트*/
+				canvas4.addEventListener('wheel', (event=>{ 
+					testCnt++
+					//if(testCnt == 1){
+						wheelEvent(ctx3, event); 
+					//}
+
+				}));
+
+				
 			}
 
 			 
@@ -795,6 +870,50 @@
 					window.open(encodedUri);
 				});
 			}
+
+			function _determineWheelSpeedAdjustment(event) {
+				switch (event.deltaMode) {
+					case event.DOM_DELTA_PAGE:
+						// one screen at time scroll mode
+						return 120;
+					case event.DOM_DELTA_LINE:
+						// one line at time scroll mode
+						return 32;
+				}
+		
+				if (!windowsChrome) {
+					return 1;
+				}
+		
+				// Chromium on Windows has a bug where the scroll speed isn't correctly
+				// adjusted for high density displays. We need to correct for this so that
+				// scroll speed is consistent between browsers.
+				// https://bugs.chromium.org/p/chromium/issues/detail?id=1001735
+				// https://bugs.chromium.org/p/chromium/issues/detail?id=1207308
+				return (1 / window.devicePixelRatio);
+			}
+
+			function isChromiumBased() {
+				if (!navigator.userAgentData) { return false; }
+				return navigator.userAgentData.brands.some(
+					(brand) => {
+						return brand.brand.includes('Chromium');
+					}
+				);
+			}
+			
+			function isWindows() {
+				// more accurate if available
+				if (
+					navigator?.userAgentData?.platform
+				) {
+					return navigator.userAgentData.platform === 'Windows';
+				}
+				return navigator.userAgent.toLowerCase().indexOf('win') >= 0;
+			}
+		
+			
+		
 		</script>
 	</body>
 </html>
