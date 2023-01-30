@@ -613,26 +613,27 @@
 					}
 			
 					if (deltaY !== 0) {
+
+						const zoomScale = Math.sign(deltaY) * Math.min(1, Math.abs(deltaY));
+						const scrollPosition = event.clientX - canvas3.getBoundingClientRect().left;
+						
+						let x = event.offsetX - zero_pos_x;
+						let sensorDataIdx = (x*(sensorList.length-1)) / chartWidth;
+						
+						let displayLen = (sensorList.length-1) - ((sensorList.length-1) * zoomScale * 0.1);
+						
+						if(sensorXList.length < displayLen){
+							return;
+						}
+
+						let leftP = sensorDataIdx/(sensorList.length-1);
+						let t1 = displayLen * leftP;
+						let t2 = displayLen - t1; 
+
+						leftZoomIdx = sensorDataIdx - t1;
+						rightZoomIdx = sensorDataIdx + t2;
+
 						if(sensorList.length <= 3){
-							const zoomScale = Math.sign(deltaY) * Math.min(1, Math.abs(deltaY));
-							const scrollPosition = event.clientX - canvas3.getBoundingClientRect().left;
-							
-							let x = event.offsetX - zero_pos_x;
-							let sensorDataIdx = (x*(sensorList.length-1)) / chartWidth;
-							 
-							let displayLen = (sensorList.length-1) - ((sensorList.length-1) * zoomScale);
-							
-							if(sensorXList.length < displayLen){
-								return;
-							}
-	
-							let leftP = sensorDataIdx/(sensorList.length-1);
-							let t1 = displayLen * leftP;
-							let t2 = displayLen - t1; 
-	
-							leftZoomIdx = sensorDataIdx - t1;
-							rightZoomIdx = sensorDataIdx + t2;
-	
 							let t1_floor = Math.floor(leftZoomIdx);
 							let t1_ceil = Math.ceil(leftZoomIdx);
 							let t2_floor = Math.floor(rightZoomIdx);
@@ -651,26 +652,6 @@
 							drawChartData(ctx3, zoomDataList);
 							crosshair(ctx4, event.offsetX, event.offsetY, event.clientX, event.clientY);
 						}else{
-							const zoomScale = Math.sign(deltaY) * Math.min(1, Math.abs(deltaY));
-							const scrollPosition = event.clientX - canvas3.getBoundingClientRect().left;
-							
-							let x = event.offsetX - zero_pos_x;
-							let sensorDataIdx = (x*(sensorList.length-1)) / chartWidth;
-							
-							let displayLen = (sensorList.length-1) - ((sensorList.length-1) * zoomScale);
-							
-							if(sensorXList.length < displayLen){
-								return;
-							}
-
-							let leftP = sensorDataIdx/(sensorList.length-1);
-							let t1 = displayLen * leftP;
-							let t2 = displayLen - t1; 
-
-							leftZoomIdx = sensorDataIdx - t1;
-							rightZoomIdx = sensorDataIdx + t2;
-
-
 							let zoomDataList = sensorList.slice(Math.round(leftZoomIdx), Math.round(rightZoomIdx));
 							drawChartData(ctx3, zoomDataList);
 							crosshair(ctx4, event.offsetX, event.offsetY, event.clientX, event.clientY);
