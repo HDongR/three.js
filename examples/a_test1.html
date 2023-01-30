@@ -409,7 +409,7 @@
 			}
 
 			function initChartUI(sensorListParam){
-				let debug_level = 1;
+				let debug_level = 0;
 				let sensorList = [];
 				if(debug_level == 0){
 					sensorList = sensorListParam.slice();
@@ -494,7 +494,6 @@
 					sensorList = dataList;
 					context.clearRect(0, 0, width, height);
 					context.beginPath();
-					context.scale(12.5, 1);
 					for(let i=0; i<dataList.length-1; ++i){
 						let xPos = zero_pos_x + chartWidth * (i / (dataList.length - 1));
 						let yPos = zero_pos_y - ((chart_10000_offset*dataList[i]) / 10000.0);
@@ -733,11 +732,11 @@
 				canvas4.addEventListener('wheel', (event=>{ 
 					
 					//if(testCnt < 1){
-						//wheelEvent(ctx3, event); 
+						wheelEvent(ctx3, event); 
 					//}
 					//testCnt++;
 
-					zoomEvent(ctx3, event);
+					//zoomEvent(ctx3, event);
 				}));
 
 				
