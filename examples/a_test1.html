@@ -599,7 +599,7 @@
 					crosshair(ctx4, event.offsetX, event.offsetY, event.clientX, event.clientY);
 				}));
 
-				let preSelectIdxList = [];
+
 				function wheelEvent(context, event){
 					if(event.offsetX < zero_pos_x || zero_pos_x + chartWidth < event.offsetX){
 						return;
@@ -610,8 +610,6 @@
 					}
 			
 					const scrollSpeedAdjustment = _determineWheelSpeedAdjustment(event);
-			
-					const deltaX = scrollSpeedAdjustment * event.deltaX / 100;
 					const deltaY = -(scrollSpeedAdjustment * event.deltaY / 100);
 			
 					if (event.cancelable) {
@@ -619,33 +617,26 @@
 					}
 			
 					if (deltaY !== 0) {
-
-						const zoomScale = Math.sign(deltaY) * Math.min(1, Math.abs(deltaY));
-						const scrollPosition = event.clientX - canvas3.getBoundingClientRect().left;
-						 
-						if(zoomScale > 0){
-							zoomIn(0.3, event);
+						if(deltaY > 0){
+							zoomIn(0.1, event);
 						}else{
-							zoomOut(0.3, event);
+							zoomOut(0.1, event);
 						}
 						
-						
-						//console.log(zoomDateCount, sensorData, sensorDataIdx, sensorList);
-						
-						//scrollPosition, zoomScale 
 					}
 				}
+
+				let originLeftOffset = 0;
 
 				function zoomIn(zoomScale, event){
 					let x = event.offsetX - zero_pos_x;
 					let sensorDataIdx = (x*(sensorList.length-1)) / chartWidth;
 					
-					let displayLen = sensorList.length - (sensorList.length * zoomScale * 0.1);
-					console.log('zoomIn', displayLen);
+					let displayLen = sensorList.length - (sensorList.length * zoomScale);
+					//console.log('zoomIn', sensorList.length, displayLen);
 					if(sensorXList.length < displayLen){
 						return;
 					}
-					preSelectIdxList.push({sensorDataIdx, displayLen});
 
 					let diffLen = sensorList.length - displayLen;
 					let leftP = sensorDataIdx/(sensorList.length-1);
@@ -656,6 +647,10 @@
 
 					let leftIdx = leftAddedCnt;
 					let rightIdx = sensorList.length - rightAddedCnt;
+					
+					originLeftOffset += leftIdx;
+
+					//console.log('sensorDataIdx:'+sensorDataIdx, 'nextIdx'+nextIdx, 'leftAddedCnt:'+leftAddedCnt, 'rightAddedCnt:'+rightAddedCnt, 'leftIdx:'+leftIdx, 'rightIdx:'+rightIdx);
 
 					let zoomDataList = undefined;
 					if(sensorList.length <= 3){
@@ -682,61 +677,46 @@
 					}
 				}
 
-				function getOriginListIndex(){
-					let copyList = originList.slice();
-
-					let result = 0;
-					for(let i=0; i<preSelectIdxList.length; ++i){
-						let {sensorDataIdx, displayLen} = preSelectIdxList[i];
-						let diffLen = copyList.length - displayLen;
-						let leftP = sensorDataIdx/(copyList.length-1);
-						let nextIdx = copyList.length * leftP;
-
-						let leftAddedCnt = diffLen * leftP;
-						let rightAddedCnt = diffLen * (1 - leftP);
-
-						let leftIdx = leftAddedCnt;
-						let rightIdx = copyList.length - rightAddedCnt;
-
-						//console.log('len:'+copyList.length, 'left:'+Math.round(leftIdx), 'right'+Math.round(rightIdx));
-						let _leftIdx_round = Math.round(leftIdx)
-						copyList = copyList.slice(_leftIdx_round, Math.round(rightIdx));
-					
-						if(i == preSelectIdxList.length -1){
-							result += nextIdx;
-						}else{
-							result += _leftIdx_round;
-						}
-					}
-					return result;
-					//console.log('end');
-				}
-
-				function zoomOut(zoomScale, event){
-					//console.log(preSelectIdxList);
-					let originListIndex = getOriginListIndex(preSelectIdxList);
-					preSelectIdxList.pop();
-					 
-
+				function zoomOut(zoomScale, event){ 
 					let x = event.offsetX - zero_pos_x;
 					let sensorDataIdx = (x*(sensorList.length-1)) / chartWidth;
-					let sensorDataIdx2 = (x*(originList.length)) / chartWidth;
+					let originalCurrentIdx = (x*(originList.length)) / chartWidth;
 					
-					let displayLen = sensorList.length + (sensorList.length * zoomScale * 0.1);
-					console.log('zoomOut', displayLen);
+					let displayLen = sensorList.length + (sensorList.length * zoomScale);
+					//console.log('zoomOut', sensorList.length, displayLen);
+				 
 					if(displayLen < 0){
 						return;
 					}
 
 					let diffLen = displayLen - sensorList.length;
 					let leftP = sensorDataIdx/(sensorList.length-1);
-					
+					let nextIdx = displayLen * leftP;
+
 					let leftStartIdx = displayLen * leftP;
 					let rightEndIdx = displayLen * (1 - leftP);
 
-				 
-					let leftIdx = originListIndex - leftStartIdx;
-					let rightIdx = originListIndex + rightEndIdx;
+					
+					let leftAddedCnt = diffLen * leftP;
+					let rightAddedCnt = diffLen * (1 - leftP);
+
+					let currentStartIdx = originLeftOffset;
+					let currentEndIdx = sensorList.length + currentStartIdx;
+
+					let nextLen = currentEndIdx - currentStartIdx;
+
+					let nextStartIdx = currentStartIdx - leftAddedCnt;
+					let nextEndIdx = currentEndIdx + rightAddedCnt;
+
+
+					originLeftOffset-=leftAddedCnt;
+					if(originLeftOffset < 0){
+						originLeftOffset = 0;
+					}
+					//console.log('originLeftOffset:'+originLeftOffset);
+					let leftIdx = nextStartIdx;
+					let rightIdx = nextEndIdx;
+					
 
 					leftIdx = Math.round(leftIdx);
 					if(leftIdx < 0){
@@ -747,13 +727,13 @@
 					if(rightIdx >= originList.length){
 						rightIdx = originList.length;
 					}
-					if(preSelectIdxList.length <= 0){
-						let zoomDataList = originList;
-						drawChartData(ctx3, zoomDataList);
-					}else{
-						let zoomDataList = originList.slice(Math.round(leftIdx), Math.round(rightIdx));
-						drawChartData(ctx3, zoomDataList);
-					}
+					
+						//let zoomDataList = originList;
+						//drawChartData(ctx3, zoomDataList);
+					
+					let zoomDataList = originList.slice(Math.round(leftIdx), Math.round(rightIdx));
+					drawChartData(ctx3, zoomDataList);
+					
 					crosshair(ctx4, event.offsetX, event.offsetY, event.clientX, event.clientY);
 				}
 
@@ -762,10 +742,10 @@
 				/*줌인 이벤트*/
 				canvas4.addEventListener('wheel', (event=>{ 
 					
-					if(	event.deltaY < 0 && test_ZoomIn_Cnt < 2000000){
+					if(	event.deltaY < 0 && test_ZoomIn_Cnt < 200000){
 						wheelEvent(ctx3, event);
 						test_ZoomIn_Cnt++;
-					}else if(event.deltaY > 0 && test_ZoomOut_Cnt < 200000000){
+					}else if(event.deltaY > 0 && test_ZoomOut_Cnt < 200000){
 						wheelEvent(ctx3, event); 
 						test_ZoomOut_Cnt++;
 					}
