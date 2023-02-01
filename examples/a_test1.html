@@ -314,9 +314,9 @@
 				let startDateZ = 1666967235400 + 9 * 60 * 60 * 1000;
 				*/
 				//100 hz
-				let startDateX = 1666967237680 + 9 * 60 * 60 * 1000;
-				let startDateY = 1666967237440 + 9 * 60 * 60 * 1000;
-				let startDateZ = 1666967238060 + 9 * 60 * 60 * 1000;
+				let startDateX = 1666967237680 + 9 * 60 * 60 * 1000 *2; //toISOString()스트링으로 출력하면 utc로 출력되므로 9*2시간을 더해주었다.
+				let startDateY = 1666967237440 + 9 * 60 * 60 * 1000 *2;
+				let startDateZ = 1666967238060 + 9 * 60 * 60 * 1000 *2;
 				
 				let sec1 = sensorXList.length / hz;
 				let sec2 = sensorYList.length / hz;
@@ -473,10 +473,115 @@
 			let preMovePosX = 0;
 			let dragDirection = Left;
 			
-			function animLine(){
+			function initChartUI(sensorListParam){
+				if(debug_level == 0){
+					sensorList = sensorListParam.slice();
+				}else if(debug_level == 1){
+					sensorList = debugList[0].slice();
+				}else if(debug_level == 2){
+					sensorList = debugList[1].slice();
+				}
+				originListLength = sensorList.length;
+				originList = sensorList.slice();
+
+				width = $('#timeStepSlider').width();
+				height = 300;
+
+				chart_offset_top = 20;
+				chart_offset_bottom = 20;
+				chart_offset_left = 20;
+				chart_offset_right = 20;
 				
-			}
+				chart_10000_offset = height / 5;
+
+				added_left_offset = 30;
+				start_x_offset = chart_offset_left + added_left_offset;
+				font_height = 8;
+
+				chartWidth = width - start_x_offset - chart_offset_right;
+				chartHeight = height - chart_offset_top - chart_offset_bottom;
+
+				zero_pos_x = start_x_offset;
+				zero_pos_y = height/2;
+				
+				$('#myChart').append(`
+				<canvas id="backCanvas" style="background: cornsilk;position:absolute;" width="${width}" height="${height}"></canvas>
+				<canvas id="settingCanvas" style="position:absolute;" width="${width}" height="${height}"></canvas>
+				<canvas id="dataCanvas" style="position:absolute;" width="${width}" height="${height}"></canvas>
+				<canvas id="animLineCanvas" style="position:absolute;" width="${width}" height="${height}"></canvas>
+				<canvas id="crossHairCanvas" style="position:absolute;" width="${width}" height="${height}"></canvas>
+				`);
 			
+				backCanvas = document.getElementById("backCanvas"); //빈 canvas
+				backCanvasContext = backCanvas.getContext("2d");
+				
+				settingCanvas = document.getElementById("settingCanvas"); //차트 style setting
+				settingCanvasContext = settingCanvas.getContext("2d");
+
+				dataCanvas = document.getElementById("dataCanvas"); //데이터뷰, 이벤트처리
+				dataCanvasContext = dataCanvas.getContext("2d");
+
+				animLineCanvas = document.getElementById("animLineCanvas"); //애니메이션 라인
+				animLineCanvasContext = animLineCanvas.getContext("2d");
+
+				crossHairCanvas = document.getElementById("crossHairCanvas"); //crosshair
+				crossHairCanvasContext = crossHairCanvas.getContext("2d");
+				
+				drawChartSetting(settingCanvasContext);
+				drawChartData(dataCanvasContext, sensorList);
+				
+
+				crossHairCanvas.addEventListener('wheel', (event=>{  
+					wheelEvent(dataCanvasContext, event);
+				}));
+			 
+				crossHairCanvas.addEventListener('mousedown', (e=>{
+					if (e.button !== Left) {
+						return;
+					}
+					_mouseMoveStartPositionX = e.offsetX;
+					if(_mouseMoveStartPositionX < zero_pos_x || zero_pos_x + chartWidth < _mouseMoveStartPositionX){
+						return;
+					}
+					_mousePressed = true; 
+				}));
+				
+				crossHairCanvas.addEventListener('mousemove', (e=>{ 
+					crosshair(crossHairCanvasContext, event.offsetX, event.offsetY);
+
+					if (e.button !== Left) {
+						return;
+					}
+					let mousemovePosX = e.offsetX;
+					if(mousemovePosX < zero_pos_x || zero_pos_x + chartWidth < mousemovePosX){
+						_mousePressed = false;
+						return;
+					}
+					let dragDistance = _mouseMoveStartPositionX - mousemovePosX; 
+					if(_mousePressed && Math.abs(dragDistance) > 5){
+						drag(e, dragDistance);
+					}
+				}));
+				crossHairCanvas.addEventListener('mouseup', (e=>{ 
+					if (e.button !== Left) {
+						return;
+					}
+					let mousemovePosX = e.offsetX;
+					if(mousemovePosX < zero_pos_x || zero_pos_x + chartWidth < mousemovePosX){
+						return;
+					}
+					if(_mousePressed){
+						_mousePressed = false;
+					}
+				}));
+				crossHairCanvas.addEventListener('click', (e=>{ 
+					if (e.button !== Left) {
+						return;
+					}
+					chartClick(e, animLineCanvasContext);
+				}));
+			}
+
 			function drawChartSetting(context){
 				context.clearRect(0, 0, width, height);
 				context.beginPath();
@@ -512,6 +617,84 @@
 					context.lineTo(next_xPos, next_yPos);
 				}
 				
+				context.stroke();
+			}
+			
+			function animLine(context, currentTime, animCount){
+				context.clearRect(0, 0, width, height);
+				context.beginPath();
+		 
+				let pixcelPerIdx = originList.length / chartWidth;
+				let be = animCount / originList.length; 
+				let idxPerPixcelLen = be*chartWidth;
+
+				let offsetLeft = idxPerPixcelLen * pixcelPerIdx - originLeftOffset;
+				if(offsetLeft < 0){
+					return;
+				}
+
+				let xPos = zero_pos_x + idxPerPixcelLen;
+				let yPos = 20;
+				/*y축 그리기*/
+				context.setLineDash([5, 10]);
+				context.moveTo(xPos, 0);
+				context.lineTo(xPos, height);
+				context.strokeStyle = '#0000ff';
+
+				 
+				let sensorDataIdx = (idxPerPixcelLen*(originList.length - 1)) / chartWidth;
+				let f_sensorIdx = Math.round(sensorDataIdx);
+				//let sensorData = originList[f_sensorIdx];
+				let sensorData = originList[animCount];
+				let y = zero_pos_y - ((chart_10000_offset*sensorData) / 10000.0);
+
+				let interpolation = false;
+				if(interpolation){
+					let isLastData = f_sensorIdx+1 == originList.length;
+					let sensorData2 = 0;
+					let y2 = 0;
+					let decimalPointBelow = 0;
+					let dy = 0;
+					let sensorData_delta = 0;
+					if(isLastData){
+						sensorData2 = originList[f_sensorIdx];
+						dy = zero_pos_y - ((chart_10000_offset*sensorData2) / 10000.0);
+						sensorData_delta = sensorData2;
+					}else{
+						sensorData2 = originList[f_sensorIdx+1];
+						y2 = zero_pos_y - ((chart_10000_offset*sensorData2) / 10000.0);
+						decimalPointBelow = sensorDataIdx - f_sensorIdx;
+						dy = THREE.MathUtils.lerp(y, y2, decimalPointBelow);
+						sensorData_delta = THREE.MathUtils.lerp(sensorData, sensorData2, decimalPointBelow);
+					}
+					context.moveTo(zero_pos_x, dy);
+					context.lineTo(zero_pos_x + chartWidth, dy);
+
+					/*dot point 그리기*/
+					context.fillStyle = '#0000ff';
+					context.arc(xPos, dy, 3, 0, 2 * Math.PI, true);
+					context.fill();
+
+					/*label*/
+					context.font = "12px serif";
+					let s_sensorData = sensorData_delta.toFixed(2);
+					let measure = context.measureText(s_sensorData);
+					context.fillText(s_sensorData, xPos, yPos);
+				}else{
+					context.moveTo(zero_pos_x, y);
+					context.lineTo(zero_pos_x + chartWidth, y);
+
+					/*dot point 그리기*/
+					context.fillStyle = '#0000ff';
+					context.arc(xPos, y, 3, 0, 2 * Math.PI, true);
+					context.fill();
+
+					/*label*/
+					context.font = "12px serif";
+					let s_sensorData = sensorData.toFixed(2);
+					let measure = context.measureText(s_sensorData);
+					context.fillText(s_sensorData, xPos, yPos);
+				}
 				context.stroke();
 			}
 			
@@ -636,8 +819,6 @@
 				let leftIdx = leftAddedCnt;
 				let rightIdx = sensorList.length - rightAddedCnt;
 
-				 
-
 				let currentStartIdx = originLeftOffset;
 				let currentEndIdx = sensorList.length + currentStartIdx;
 
@@ -646,8 +827,9 @@
 				let nextStartIdx = currentStartIdx + leftAddedCnt;
 				let nextEndIdx = currentEndIdx - rightAddedCnt;
 
+			 
+
 				originLeftOffset += leftIdx;
-				 
 
 				nextStartIdx = Math.round(nextStartIdx);
 				if(nextStartIdx < 0){
@@ -674,7 +856,7 @@
 			function zoomOut(zoomScale, event){ 
 				let x = event.offsetX - zero_pos_x;
 				let sensorDataIdx = (x*(sensorList.length-1)) / chartWidth;
-				let originalCurrentIdx = (x*(originList.length)) / chartWidth;
+				let originalCurrentIdx = (x*(originList.length-1)) / chartWidth;
 				
 				let displayLen = sensorList.length + (sensorList.length * zoomScale);
 				//console.log('zoomOut', sensorList.length, displayLen);
@@ -732,10 +914,6 @@
 				crosshair(crossHairCanvasContext, event.offsetX, event.offsetY);
 			}
 
-			/*드래그 이벤트*/
-			function getPosition(e) {
-				return {x: e.offsetX, y: e.offsetY};
-			}
 			function drag(event, distance){
 				if(currentListLen <= 0){
 					return;
@@ -755,7 +933,7 @@
 				
 				let x = event.offsetX - zero_pos_x;
 				let sensorDataIdx = (x*(sensorList.length-1)) / chartWidth;
-				let originalCurrentIdx = (x*(originList.length)) / chartWidth;
+				let originalCurrentIdx = (x*(originList.length-1)) / chartWidth;
 				
 				let be = sensorList.length / chartWidth;
 				let dragScale = diff * be;
@@ -777,117 +955,42 @@
 				let zoomDataList = originList.slice(Math.round(splitStartIdx), Math.round(splitEndIdx));
 				drawChartData(dataCanvasContext, zoomDataList);
 				
-				crosshair(crossHairCanvasContext, event.offsetX, event.offsetY);
-
+				crosshair(crossHairCanvasContext, event.offsetX, event.offsetY); 
 			}
 
-			function initChartUI(sensorListParam){
-				if(debug_level == 0){
-					sensorList = sensorListParam.slice();
-				}else if(debug_level == 1){
-					sensorList = debugList[0].slice();
-				}else if(debug_level == 2){
-					sensorList = debugList[1].slice();
-				}
-				originListLength = sensorList.length;
-				originList = sensorList.slice();
-
-				width = $('#timeStepSlider').width();
-				height = 300;
-
-				chart_offset_top = 20;
-				chart_offset_bottom = 20;
-				chart_offset_left = 20;
-				chart_offset_right = 20;
+			function chartClick(event, context){
 				
-				chart_10000_offset = height / 5;
+				let be = sensorList.length / chartWidth;
 
-				added_left_offset = 30;
-				start_x_offset = chart_offset_left + added_left_offset;
-				font_height = 8;
-
-				chartWidth = width - start_x_offset - chart_offset_right;
-				chartHeight = height - chart_offset_top - chart_offset_bottom;
-
-				zero_pos_x = start_x_offset;
-				zero_pos_y = height/2;
+				let x = event.offsetX - zero_pos_x;
+				let sensorDataIdx = (x*(sensorList.length-1)) / chartWidth;
+				let originalCurrentIdx = (x*(originList.length-1)) / chartWidth;
+   
 				
-				$('#myChart').append(`
-				<canvas id="backCanvas" style="background: cornsilk;position:absolute;" width="${width}" height="${height}"></canvas>
-				<canvas id="settingCanvas" style="position:absolute;" width="${width}" height="${height}"></canvas>
-				<canvas id="dataCanvas" style="position:absolute;" width="${width}" height="${height}"></canvas>
-				<canvas id="animLineCanvas" style="position:absolute;" width="${width}" height="${height}"></canvas>
-				<canvas id="crossHairCanvas" style="position:absolute;" width="${width}" height="${height}"></canvas>
-				`);
-			
-				backCanvas = document.getElementById("backCanvas"); //빈 canvas
-				backCanvasContext = backCanvas.getContext("2d");
+
+				let currentStartIdx = originLeftOffset;
+				let currentEndIdx = sensorList.length + currentStartIdx;
+
+				let currentLen = currentEndIdx - currentStartIdx;
+
+				let currentDataIdx = sensorDataIdx + originLeftOffset;
+
+				let be2 = sensorDataIdx / sensorList.length; 
+				let idxPerPixcel = be2*chartWidth;
+
+				let xPos = zero_pos_x + idxPerPixcel;
 				
-				settingCanvas = document.getElementById("settingCanvas"); //차트 style setting
-				settingCanvasContext = settingCanvas.getContext("2d");
-
-				dataCanvas = document.getElementById("dataCanvas"); //데이터뷰, 이벤트처리
-				dataCanvasContext = dataCanvas.getContext("2d");
-
-				animLineCanvas = document.getElementById("animLineCanvas"); //애니메이션 라인
-				animLineCanvasContext = dataCanvas.getContext("2d");
-
-				crossHairCanvas = document.getElementById("crossHairCanvas"); //crosshair
-				crossHairCanvasContext = crossHairCanvas.getContext("2d");
-
-				let x_axis_start_value = startMinDateGlobal;
-				let x_axis_end_value = startMinDateGlobal + ((sensorList.length-1) * 1/hz * 1000);
+				animCount = Math.floor(currentDataIdx);
 				
-				drawChartSetting(settingCanvasContext);
-				drawChartData(dataCanvasContext, sensorList);
+				console.log('currentLen:'+currentLen, 'currentStartIdx:'+currentStartIdx, 'currentEndIdx:'+currentEndIdx);
+			  
+				
 				 
-
-				crossHairCanvas.addEventListener('wheel', (event=>{  
-					wheelEvent(dataCanvasContext, event);
-				}));
-			 
-				crossHairCanvas.addEventListener('mousedown', (e=>{
-					if (e.button !== Left) {
-						return;
-					}
-					_mouseMoveStartPositionX = e.offsetX;
-					if(_mouseMoveStartPositionX < zero_pos_x || zero_pos_x + chartWidth < _mouseMoveStartPositionX){
-						return;
-					}
-					_mousePressed = true; 
-				}));
+			//	drawChartData(dataCanvasContext, zoomDataList);
 				
-				crossHairCanvas.addEventListener('mousemove', (e=>{ 
-					crosshair(crossHairCanvasContext, event.offsetX, event.offsetY);
-
-					if (e.button !== Left) {
-						return;
-					}
-					let mousemovePosX = e.offsetX;
-					if(mousemovePosX < zero_pos_x || zero_pos_x + chartWidth < mousemovePosX){
-						_mousePressed = false;
-						return;
-					}
-					let dragDistance = _mouseMoveStartPositionX - mousemovePosX; 
-					if(_mousePressed && Math.abs(dragDistance) > 5){
-						drag(e, dragDistance);
-					}
-				}));
-				crossHairCanvas.addEventListener('mouseup', (e=>{ 
-					if (e.button !== Left) {
-						return;
-					}
-					let mousemovePosX = e.offsetX;
-					if(mousemovePosX < zero_pos_x || zero_pos_x + chartWidth < mousemovePosX){
-						return;
-					}
-					if(_mousePressed){
-						_mousePressed = false;
-					}
-				}));
-
+				//crosshair(crossHairCanvasContext, event.offsetX, event.offsetY); 
 			}
-			
+
 			async function getMseedData(url){
 				let res = await fetch(url);
 				let resTxt = await res.text();
@@ -1016,7 +1119,7 @@
 							timeStepSlider.slider('value',currentTime);
 							infoView.text(''+ new Date(currentTime).toISOString() + ' 진행:'+ (_animCount/sensorXList.length*100).toFixed(2) + '% ' + '    ' + _animCount + '/' + sensorXList.length + '     x:'+xT+'     y:'+yT+'     z:'+zT);
 
-							animLine();
+							animLine(animLineCanvasContext, currentTime, _animCount);
 						}
 
 						
