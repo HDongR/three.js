@@ -451,29 +451,28 @@
 				let zero_pos_y = height/2;
 				
 				$('#myChart').append(`
-				<canvas id="myChartCanvas1" style="background: cornsilk;position:absolute;" width="${width}" height="${height}"></canvas>
-				<canvas id="myChartCanvas2" style="position:absolute;" width="${width}" height="${height}"></canvas>
-				<canvas id="myChartCanvas3" style="position:absolute;" width="${width}" height="${height}"></canvas>
-				<canvas id="myChartCanvas4" style="position:absolute;" width="${width}" height="${height}"></canvas>
-				 
+				<canvas id="backCanvas" style="background: cornsilk;position:absolute;" width="${width}" height="${height}"></canvas>
+				<canvas id="settingCanvas" style="position:absolute;" width="${width}" height="${height}"></canvas>
+				<canvas id="dataCanvas" style="position:absolute;" width="${width}" height="${height}"></canvas>
+				<canvas id="crossHairCanvas" style="position:absolute;" width="${width}" height="${height}"></canvas>
 				`);
 			
-				let canvas1 = document.getElementById("myChartCanvas1");
-				let ctx1 = canvas1.getContext("2d");
+				let backCanvas = document.getElementById("backCanvas");
+				let backCanvasContext = backCanvas.getContext("2d");
 				
-				let canvas2 = document.getElementById("myChartCanvas2");
-				let ctx2 = canvas2.getContext("2d");
+				let settingCanvas = document.getElementById("settingCanvas");
+				let settingCanvasContext = settingCanvas.getContext("2d");
 
-				let canvas3 = document.getElementById("myChartCanvas3");
-				let ctx3 = canvas3.getContext("2d");
+				let dataCanvas = document.getElementById("dataCanvas"); //데이터뷰, 이벤트처리
+				let dataCanvasContext = dataCanvas.getContext("2d");
 
-				let canvas4 = document.getElementById("myChartCanvas4");
-				let ctx4 = canvas4.getContext("2d");
+				let crossHairCanvas = document.getElementById("crossHairCanvas"); //crosshair
+				let crossHairCanvasContext = crossHairCanvas.getContext("2d");
 
 				function draw(){
-					ctx1.drawImage(canvas2, 0, 0);
-					ctx1.drawImage(canvas3, 0, 0);
-					ctx1.drawImage(canvas4, 0, 0);
+					backCanvasContext.drawImage(settingCanvas, 0, 0);
+					backCanvasContext.drawImage(dataCanvas, 0, 0);
+					backCanvasContext.drawImage(crossHairCanvas, 0, 0);
 				}
 
 				function drawChartSetting(context){
@@ -496,7 +495,7 @@
 					
 					context.stroke();
 				}
-				drawChartSetting(ctx2);
+				drawChartSetting(settingCanvasContext);
 				
 
 				let x_axis_start_value = startMinDateGlobal;
@@ -523,7 +522,7 @@
 					
 					context.stroke();
 				}
-				drawChartData(ctx3, sensorList);
+				drawChartData(dataCanvasContext, sensorList);
 
 				function crosshair(context, mouseX, mouseY){
 					/*clear context*/
@@ -598,12 +597,6 @@
 					
 					context.stroke();
 				}
-
-				/*마우스 크로스 오버 생성 이벤트*/
-				canvas4.addEventListener('mousemove',(event=>{
-					crosshair(ctx4, event.offsetX, event.offsetY);
-				}));
-
 
 				function wheelEvent(context, event){
 					if(event.offsetX < zero_pos_x || zero_pos_x + chartWidth < event.offsetX){
@@ -687,8 +680,8 @@
 
 					let zoomDataList = undefined;
 					zoomDataList = sensorList.slice(Math.round(leftIdx), Math.round(rightIdx));
-					drawChartData(ctx3, zoomDataList);
-					crosshair(ctx4, event.offsetX, event.offsetY);
+					drawChartData(dataCanvasContext, zoomDataList);
+					crosshair(crossHairCanvasContext, event.offsetX, event.offsetY);
 					
 				}
 
@@ -733,7 +726,6 @@
 					//console.log('originLeftOffset:'+originLeftOffset);
 					let leftIdx = nextStartIdx;
 					let rightIdx = nextEndIdx;
-					
 
 					leftIdx = Math.round(leftIdx);
 					if(leftIdx < 0){
@@ -749,21 +741,21 @@
 					globalZoomEndIdx = rightIdx;
 					
 					let zoomDataList = originList.slice(Math.round(leftIdx), Math.round(rightIdx));
-					drawChartData(ctx3, zoomDataList);
+					drawChartData(dataCanvasContext, zoomDataList);
 					
-					crosshair(ctx4, event.offsetX, event.offsetY);
+					crosshair(crossHairCanvasContext, event.offsetX, event.offsetY);
 				}
 
 				let test_ZoomIn_Cnt = 0;
 				let test_ZoomOut_Cnt = 0
 				/*줌인 이벤트*/
-				canvas4.addEventListener('wheel', (event=>{ 
+				crossHairCanvas.addEventListener('wheel', (event=>{ 
 					
 					if(	event.deltaY < 0 && test_ZoomIn_Cnt < 200000){
-						wheelEvent(ctx3, event);
+						wheelEvent(dataCanvasContext, event);
 						test_ZoomIn_Cnt++;
 					}else if(event.deltaY > 0 && test_ZoomOut_Cnt < 200000){
-						wheelEvent(ctx3, event); 
+						wheelEvent(dataCanvasContext, event); 
 						test_ZoomOut_Cnt++;
 					}
 				}));
@@ -827,12 +819,12 @@
 					globalZoomEndIdx = splitEndIdx;
 					
 					let zoomDataList = originList.slice(Math.round(splitStartIdx), Math.round(splitEndIdx));
-					drawChartData(ctx3, zoomDataList);
+					drawChartData(dataCanvasContext, zoomDataList);
 					
-					crosshair(ctx4, event.offsetX, event.offsetY);
+					crosshair(crossHairCanvasContext, event.offsetX, event.offsetY);
  
 				}
-				canvas4.addEventListener('mousedown', (e=>{
+				crossHairCanvas.addEventListener('mousedown', (e=>{
 					if (e.button !== Left) {
 						return;
 					}
@@ -847,7 +839,10 @@
 					_mousePressed = true; 
 					//console.log('mouse_down:', _mouseMoveStartPosition);
 				}));
-				canvas4.addEventListener('mousemove', (e=>{ 
+				
+				crossHairCanvas.addEventListener('mousemove', (e=>{ 
+					crosshair(crossHairCanvasContext, event.offsetX, event.offsetY);
+
 					if (e.button !== Left) {
 						return;
 					}
@@ -864,7 +859,7 @@
 						//console.log('mouse_move:', mousemovePos);
 					}
 				}));
-				canvas4.addEventListener('mouseup', (e=>{ 
+				crossHairCanvas.addEventListener('mouseup', (e=>{ 
 					if (e.button !== Left) {
 						return;
 					}
