@@ -21,6 +21,10 @@
 		<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 		<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 		<script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+		<script src="https://kit.fontawesome.com/2c2025e86e.js" crossorigin="anonymous"></script>
+  
+
+
 	</head>
 	<body>
 
@@ -54,6 +58,8 @@
 						<button id="junkButton">junk</button>
 						<span id="junkResult"></span>
 						<button id="outputCsvButton">outputCSV</button>
+						
+						<button id="playBtn" status="1"><i id="play" style="display:none" class="fa-solid fa-play"></i><i id="stop" class="fa-solid fa-pause"></i></button>
 						<div id="myChart">
 						</div>
 				</div>
@@ -71,8 +77,10 @@
 			import { TransformControls } from 'three/addons/controls/TransformControls.js';
 
 			import {default as CSG} from 'three/addons/a_test/three-csg.js';
+ 
+			
+			let animation = true;
 
-			console.log(CSG);
 			let camera, scene, renderer;
 			let stats;
 			let cameraControls, transformControls;
@@ -100,8 +108,9 @@
 			let t_privouseTime = 0;
 			let t_currentTime = Number.POSITIVE_INFINITY;
 			let t_diffTime = 0;
-			let speedAnim = 20;
+			let speedAnim = 10;
 			let isOriginSpeed = true;
+			let timeDelta = 0;
 
 			const windowsChrome = isChromiumBased() && isWindows();
 
@@ -407,7 +416,21 @@
 				
 				initJank();
 				initOutputCsv();
-				initChartUI(sensorXList); 
+				initChartUI(sensorXList);
+				
+				$('#playBtn').click(e=>{
+					if($('#playBtn').attr('status') == '1'){
+						$('#play').show();
+						$('#stop').hide();
+						$('#playBtn').attr('status', '0');
+						animation = false;
+					}else if($('#playBtn').attr('status') == '0'){
+						$('#play').hide();
+						$('#stop').show();
+						$('#playBtn').attr('status', '1');
+						animation = true;
+					}
+				});
 			}
 			
 			/*chart 글로벌 변수 지정*/
@@ -529,7 +552,6 @@
 				
 				drawChartSetting(settingCanvasContext);
 				drawChartData(dataCanvasContext, sensorList);
-				
 
 				crossHairCanvas.addEventListener('wheel', (event=>{  
 					wheelEvent(dataCanvasContext, event);
@@ -543,7 +565,7 @@
 					if(_mouseMoveStartPositionX < zero_pos_x || zero_pos_x + chartWidth < _mouseMoveStartPositionX){
 						return;
 					}
-					_mousePressed = true; 
+					_mousePressed = true;
 				}));
 				
 				crossHairCanvas.addEventListener('mousemove', (e=>{ 
@@ -571,15 +593,14 @@
 						return;
 					}
 					if(_mousePressed){
+						let dragDistance = _mouseMoveStartPositionX - mousemovePosX; 
+						if(Math.abs(dragDistance) <= 1){
+							chartClick(e, animLineCanvasContext);
+						}
 						_mousePressed = false;
 					}
 				}));
-				crossHairCanvas.addEventListener('click', (e=>{ 
-					if (e.button !== Left) {
-						return;
-					}
-					chartClick(e, animLineCanvasContext);
-				}));
+				
 			}
 
 			function drawChartSetting(context){
@@ -619,21 +640,25 @@
 				
 				context.stroke();
 			}
-			
-			function animLine(context, currentTime, animCount){
+			let selectPixcel = 0;
+			function animLine(context, _animCount){
 				context.clearRect(0, 0, width, height);
 				context.beginPath();
 		 
-				let pixcelPerIdx = originList.length / chartWidth;
-				let be = animCount / originList.length; 
+				let pixcelPerIdx = sensorList.length / chartWidth;
+				let be = _animCount / sensorList.length; 
 				let idxPerPixcelLen = be*chartWidth;
 
 				let offsetLeft = idxPerPixcelLen * pixcelPerIdx - originLeftOffset;
-				if(offsetLeft < 0){
-					return;
-				}
+				let offsetPixel = originLeftOffset / pixcelPerIdx;
+				//console.log('selectPixcel:'+selectPixcel, 'offsetLeft:'+offsetLeft, 'originLeftOffset:'+originLeftOffset, 'offsetPixel:'+offsetPixel);
+				
 
-				let xPos = zero_pos_x + idxPerPixcelLen;
+				let xPos = zero_pos_x + idxPerPixcelLen - offsetPixel;
+				if(xPos - zero_pos_x < 0 || xPos - zero_pos_x > chartWidth){
+					return;
+				} 
+
 				let yPos = 20;
 				/*y축 그리기*/
 				context.setLineDash([5, 10]);
@@ -641,27 +666,27 @@
 				context.lineTo(xPos, height);
 				context.strokeStyle = '#0000ff';
 
-				 
-				let sensorDataIdx = (idxPerPixcelLen*(originList.length - 1)) / chartWidth;
-				let f_sensorIdx = Math.round(sensorDataIdx);
-				//let sensorData = originList[f_sensorIdx];
-				let sensorData = originList[animCount];
+				let x = xPos - zero_pos_x;
+				let sensorDataIdx  = x*sensorList.length / chartWidth;
+				let f_sensorIdx = Math.floor(sensorDataIdx);
+				let sensorData = sensorList[f_sensorIdx];
+				//let sensorData = originList[animCount];
 				let y = zero_pos_y - ((chart_10000_offset*sensorData) / 10000.0);
 
-				let interpolation = false;
+				let interpolation = true;
 				if(interpolation){
-					let isLastData = f_sensorIdx+1 == originList.length;
+					let isLastData = f_sensorIdx+1 == sensorList.length;
 					let sensorData2 = 0;
 					let y2 = 0;
 					let decimalPointBelow = 0;
 					let dy = 0;
 					let sensorData_delta = 0;
 					if(isLastData){
-						sensorData2 = originList[f_sensorIdx];
+						sensorData2 = sensorList[f_sensorIdx];
 						dy = zero_pos_y - ((chart_10000_offset*sensorData2) / 10000.0);
 						sensorData_delta = sensorData2;
 					}else{
-						sensorData2 = originList[f_sensorIdx+1];
+						sensorData2 = sensorList[f_sensorIdx+1];
 						y2 = zero_pos_y - ((chart_10000_offset*sensorData2) / 10000.0);
 						decimalPointBelow = sensorDataIdx - f_sensorIdx;
 						dy = THREE.MathUtils.lerp(y, y2, decimalPointBelow);
@@ -851,6 +876,9 @@
 				drawChartData(dataCanvasContext, zoomDataList);
 				crosshair(crossHairCanvasContext, event.offsetX, event.offsetY);
 				
+				if(!animation){
+					animBuilding(); 
+				}
 			}
 
 			function zoomOut(zoomScale, event){ 
@@ -912,6 +940,10 @@
 				drawChartData(dataCanvasContext, zoomDataList);
 				
 				crosshair(crossHairCanvasContext, event.offsetX, event.offsetY);
+
+				if(!animation){
+					animBuilding(); 
+				}
 			}
 
 			function drag(event, distance){
@@ -956,10 +988,15 @@
 				drawChartData(dataCanvasContext, zoomDataList);
 				
 				crosshair(crossHairCanvasContext, event.offsetX, event.offsetY); 
+
+				if(!animation){
+					animCount += dragScale;
+					animBuilding(); 
+				}
 			}
 
 			function chartClick(event, context){
-				
+				let pixcelPerIdx = originList.length / chartWidth;
 				let be = sensorList.length / chartWidth;
 
 				let x = event.offsetX - zero_pos_x;
@@ -980,10 +1017,14 @@
 
 				let xPos = zero_pos_x + idxPerPixcel;
 				
-				animCount = Math.floor(currentDataIdx);
+				animCount = currentDataIdx;
+				selectPixcel = x;
 				
 				console.log('currentLen:'+currentLen, 'currentStartIdx:'+currentStartIdx, 'currentEndIdx:'+currentEndIdx);
 			  
+				if(!animation){
+					animBuilding();  
+				}
 				
 				 
 			//	drawChartData(dataCanvasContext, zoomDataList);
@@ -1026,6 +1067,13 @@
 							
 						'vec3 transformed = vec3( position ) * m;'
 					*/
+					/*
+						'float dx = sin(sensor_x / 10000.);',
+						'float dy = sin(sensor_y / 10000.);',
+						'float dz = sin(sensor_y / 10000.);',
+						'mat3 m = mat3( 1., 0., dx/k_v2, 0, 1., dy/k_v2, dz/k_v2, 0, 1.);',
+						'vec3 transformed = vec3( position ) * m;'
+					*/
 					let header = `
 						uniform float time;\n
 						uniform float sensor_x;\n
@@ -1040,7 +1088,7 @@
 							'float dx = sin(sensor_x / 10000.);',
 							'float dy = sin(sensor_y / 10000.);',
 							'float dz = sin(sensor_y / 10000.);',
-							'mat3 m = mat3( 1., 0., dx/k_v2, 0, 1., dy/k_v2, dz/k_v2, 0, 1.);',
+							'mat3 m = mat3( 1., 0., dx/k_v2, 0, 1., 0, 0, 0, 1.);',
 							'vec3 transformed = vec3( position ) * m;'
 						].join( '\n' )
 					);
@@ -1071,14 +1119,36 @@
 
 			}
 
+			function interpolationValue(list, _animCount){
 
+				let f_animCount = Math.floor(_animCount);
+ 
+				let sensorData = list[f_animCount];
+				let sensorData2 = 0;
+
+				let isLastData = f_animCount+1 == list.length;
+				let decimalPointBelow = 0;
+				let sensorData_delta = 0;
+
+				if(isLastData){
+					sensorData2 = list[f_animCount]; 
+					sensorData_delta = sensorData2;
+				}else{
+					sensorData2 = list[f_animCount+1]; 
+					decimalPointBelow = _animCount - f_animCount;
+					sensorData_delta = THREE.MathUtils.lerp(sensorData, sensorData2, decimalPointBelow);
+				}
+
+				return sensorData_delta;
+			}
 
 			function animate() {
-
+				
 				requestAnimationFrame( animate );
+				
 				t_privouseTime = t_currentTime;
 
-				let timeDelta = clock.getDelta();
+				timeDelta = clock.getDelta();
 				sumFrame += timeDelta;
 				if(sumFrame > 1.0){
 					//console.log(framecnt);
@@ -1087,73 +1157,79 @@
 					sumFrame = 0;
 				}
 				framecnt++;
-			
 				
-				if(selectMesh){
-					const shader = selectMesh.material.userData.shader;
-
-					if ( shader && sensorXList && sensorYList && sensorZList) {
-						let currentTime = startMinDateGlobal + (animCount * 1/hz * 1000);
-						t_currentTime = currentTime;
-						t_diffTime = currentTime - t_privouseTime;
-						if(t_diffTime < 1000){
-							//console.log(t_diffTime);
-						}
-
-
-						shader.uniforms.time.value = timeDelta;
-						let _animCount = Math.floor(animCount);
-						let xT = sensorXList[_animCount];
-						let yT = sensorYList[_animCount];
-						let zT = sensorZList[_animCount];
-
-						shader.uniforms.sensor_x.value = xT;
-						shader.uniforms.sensor_y.value = yT;
-						shader.uniforms.sensor_z.value = zT;
-						
-						//console.log('' + animCount + '/' + sensorXList.length, xT, yT, zT);
-						
-
-						if(infoView){
-						
-							timeStepSlider.slider('value',currentTime);
-							infoView.text(''+ new Date(currentTime).toISOString() + ' 진행:'+ (_animCount/sensorXList.length*100).toFixed(2) + '% ' + '    ' + _animCount + '/' + sensorXList.length + '     x:'+xT+'     y:'+yT+'     z:'+zT);
-
-							animLine(animLineCanvasContext, currentTime, _animCount);
-						}
-
-						
-
-						if(!isSliding){
-							//animCount++;
-							if(t_diffTime <= hz - 0.05 && t_diffTime > hz + 0.05){
-								animCount = animCount + timeDelta * speedAnim;
-							}else if(t_diffTime < hz - 0.05){
-								speedAnim += 0.01;
-								animCount = animCount + timeDelta * speedAnim;
-							}else if(t_diffTime >= hz + 0.05){
-								speedAnim -= 0.01;
-								animCount = animCount + timeDelta * speedAnim;
-							}
-							
-						}
-
-						if(animCount > sensorXList.length-1){
-							animCount = 0;
-							
-						}
-						
+				if(!isSliding && animation){
+					//animCount++;
+					if(t_diffTime <= hz - 0.01 && t_diffTime > hz + 0.01){
+						animCount = animCount + timeDelta * speedAnim;
+					}else if(t_diffTime < hz - 0.01){
+						//speedAnim += 0.01;
+						animCount = animCount + timeDelta * speedAnim;
+					}else if(t_diffTime >= hz + 0.01){
+						//speedAnim -= 0.01;
+						animCount = animCount + timeDelta * speedAnim;
 					}
+					
 				}
-				
+
+				if(animation){
+					animBuilding();
+				}
+
+				 
 				
 				renderer.render( scene, camera );
 				cameraControls.update();
 				stats.update();
-	 
+			}
+
+			function animBuilding(){
+				if(!selectMesh){
+					return;
+				}
+				const shader = selectMesh.material.userData.shader;
+
+				if ( shader && sensorXList && sensorYList && sensorZList) {
+					let currentTime = startMinDateGlobal + (animCount * 1/hz * 1000);
+					t_currentTime = currentTime;
+					t_diffTime = currentTime - t_privouseTime;
+					if(t_diffTime < 1000){
+						//console.log(t_diffTime);
+					}
 
 
-				
+					shader.uniforms.time.value = timeDelta;
+
+					let xT = interpolationValue(sensorXList, animCount);
+					let yT = interpolationValue(sensorYList, animCount);
+					let zT = interpolationValue(sensorZList, animCount);
+
+
+					let _animCount = Math.floor(animCount); 
+
+					shader.uniforms.sensor_x.value = xT;
+					shader.uniforms.sensor_y.value = yT;
+					shader.uniforms.sensor_z.value = zT;
+					
+					//console.log('' + animCount + '/' + sensorXList.length, xT, yT, zT);
+					
+
+					if(infoView){
+					
+						timeStepSlider.slider('value',currentTime);
+						
+						infoView.text(''+ new Date(currentTime).toISOString() + ' 진행:'+ (_animCount/sensorXList.length*100).toFixed(2) + '% ' + '    ' + _animCount + '/' + sensorXList.length + '     x:'+xT.toFixed(2)+'     y:'+yT.toFixed(2)+'     z:'+zT.toFixed(2));
+
+						animLine(animLineCanvasContext, animCount);
+						console.log('animCount:'+animCount);
+					}
+
+					if(animCount > sensorXList.length-1){
+						animCount = 0;
+					}
+	
+					
+				}
 			}
 
 			function getHeight(mesh){
