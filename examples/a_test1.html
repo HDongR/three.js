@@ -108,7 +108,7 @@
 			let t_privouseTime = 0;
 			let t_currentTime = Number.POSITIVE_INFINITY;
 			let t_diffTime = 0;
-			let speedAnim = 10;
+			let speedAnim = 30;
 			let isOriginSpeed = true;
 			let timeDelta = 0;
 
@@ -290,20 +290,20 @@
 
 			async function preProcess(){
 				const effectController = {
-					k_v2: 0.5,
+					magnification: 1.0,
 				};
 
 				const matChanger = function ( ) {
 					if(selectMesh){
 						const shader = selectMesh.material.userData.shader;
 						if(shader){
-							shader.uniforms.k_v2.value = effectController.k_v2;
+							shader.uniforms.magnification.value = effectController.magnification;
 						}
 					}
 				};
 				
 				const gui = new GUI();
-				gui.add( effectController, 'k_v2', 0.1, 50.0, 0.1 ).onChange( matChanger );
+				gui.add( effectController, 'magnification', 1.0, 100.0, 0.1 ).onChange( matChanger );
 				matChanger();
 
 				let geometry = selectMesh.geometry;
@@ -643,7 +643,7 @@
 				
 				context.stroke();
 			}
-			let selectPixcel = 0;
+
 			function animLine(context, _animCount){
 				context.clearRect(0, 0, width, height);
 				context.beginPath();
@@ -654,9 +654,7 @@
 
 				let offsetLeft = idxPerPixcelLen * pixcelPerIdx - originLeftOffset;
 				let offsetPixel = originLeftOffset / pixcelPerIdx;
-				//console.log('selectPixcel:'+selectPixcel, 'offsetLeft:'+offsetLeft, 'originLeftOffset:'+originLeftOffset, 'offsetPixel:'+offsetPixel);
 				
-
 				let xPos = zero_pos_x + idxPerPixcelLen - offsetPixel;
 				if(xPos - zero_pos_x < 0 || xPos - zero_pos_x > chartWidth){
 					return;
@@ -1021,7 +1019,6 @@
 				let xPos = zero_pos_x + idxPerPixcel;
 				
 				animCount = currentDataIdx;
-				selectPixcel = x;
 				
 				console.log('currentLen:'+currentLen, 'currentStartIdx:'+currentStartIdx, 'currentEndIdx:'+currentEndIdx);
 			  
@@ -1051,47 +1048,41 @@
 				material.onBeforeCompile = function ( shader ) {
 
 					shader.uniforms.time = { value: 0 };
+					shader.uniforms.hz = { value: hz };
 					shader.uniforms.sensor_x = { value: 0 };
 					shader.uniforms.sensor_y = { value: 0 };
 					shader.uniforms.sensor_z = { value: 0 };
-					shader.uniforms.k_v2 = { value: 0.5 };
+					shader.uniforms.magnification = { value: 1.0 };
+					shader.uniforms.b_height = { value: 0 };
 					/* 
-						`float theta = cos( time*5. );`,
-						'mat3 m = mat3( 1., 0, 0, 0, 1, 0, 0, 0, 1);',
-							
-						'	m = mat3( 1., 0, theta/5., 0, 1, 0, 0, 0, 1);',
-							
-						'vec3 transformed = vec3( position ) * m;'
-					*/
-
-					/*
-						'float dx = sin(sensor_x / 10000.);',
-						'mat3 m = mat3( 1., 0, dx/k_v2, 0, 1., 0, 0, 0, 1.);', 
-							
-						'vec3 transformed = vec3( position ) * m;'
-					*/
-					/*
-						'float dx = sin(sensor_x / 10000.);',
-						'float dy = sin(sensor_y / 10000.);',
-						'float dz = sin(sensor_y / 10000.);',
-						'mat3 m = mat3( 1., 0., dx/k_v2, 0, 1., dy/k_v2, dz/k_v2, 0, 1.);',
-						'vec3 transformed = vec3( position ) * m;'
+						 '	m = mat3( 1., 0., dx, 0, 1., dy, dz, 0, 1.);',
 					*/
 					let header = `
 						uniform float time;\n
+						uniform float hz;\n
 						uniform float sensor_x;\n
 						uniform float sensor_y;\n
 						uniform float sensor_z;\n
-						uniform float k_v2;\n
+						uniform float magnification;\n
+						uniform float b_height;\n
 					`;
 					shader.vertexShader = header + shader.vertexShader;
 					shader.vertexShader = shader.vertexShader.replace(
 						'#include <begin_vertex>',
-						[ 
-							'float dx = sin(sensor_x / 10000.);',
-							'float dy = sin(sensor_y / 10000.);',
-							'float dz = sin(sensor_y / 10000.);',
-							'mat3 m = mat3( 1., 0., dx/k_v2, 0, 1., 0, 0, 0, 1.);',
+						[ 	
+							'float factor2 = pow2(PI2*hz);',
+							'float dx = sensor_x*0.01/factor2;',
+							'float dy = sensor_y*0.01/factor2;',
+							'float dz = sensor_z*0.01/factor2;',
+							'dx=dx*magnification;',
+							'dy=dy*magnification;',
+							'dz=dz*magnification;',
+							'mat3 m = mat3( 1., 0, 0, 0, 1, 0, 0, 0, 1);',
+							'if(position.y < b_height*0.4){',
+							'	m = mat3( 1., 0., dx, 0, 1., 0, 0, 0, 1.);',
+							'}else{',
+							'	m = mat3( 1., 0, 0, 0, 1, 0, 0, 0, 1);',
+							'}',
 							'vec3 transformed = vec3( position ) * m;'
 						].join( '\n' )
 					);
@@ -1213,7 +1204,7 @@
 					shader.uniforms.sensor_x.value = xT;
 					shader.uniforms.sensor_y.value = yT;
 					shader.uniforms.sensor_z.value = zT;
-					
+					shader.uniforms.b_height.value = maxHeight;
 					//console.log('' + animCount + '/' + sensorXList.length, xT, yT, zT);
 					
 
@@ -1224,7 +1215,7 @@
 						infoView.text(''+ new Date(currentTime).toISOString() + ' 진행:'+ (_animCount/sensorXList.length*100).toFixed(2) + '% ' + '    ' + _animCount + '/' + sensorXList.length + '     x:'+xT.toFixed(2)+'     y:'+yT.toFixed(2)+'     z:'+zT.toFixed(2));
 
 						animLine(animLineCanvasContext, animCount);
-						console.log('animCount:'+animCount);
+						//console.log('animCount:'+animCount);
 					}
 
 					if(animCount > sensorXList.length-1){
