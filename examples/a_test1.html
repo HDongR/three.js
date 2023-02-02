@@ -393,6 +393,9 @@
 						//$('#timeStepValue').text(new Date(ui.value));
 						let diffTime = ui.value - startMinDate;
 						animCount = Math.floor(diffTime/1000*hz);
+						if(!animation){
+							animBuilding();
+						}
 						//$('#timeXYZ').text('x:'+sensorXList[animCount]+' y:'+sensorYList[animCount]+' z:'+sensorZList[animCount]);
 					},
 					start: function(event, ui){
@@ -733,9 +736,9 @@
 				}
 
 				/*y축 그리기*/
-				context.setLineDash([5, 10]);
-				context.moveTo(mouseX, 0);
-				context.lineTo(mouseX, height);
+				//context.setLineDash([5, 10]);
+				//context.moveTo(mouseX, 0);
+				//context.lineTo(mouseX, height);
 				context.strokeStyle = '#ff00ff';
 
 				/*x축 그리기*/
@@ -765,16 +768,16 @@
 						dy = THREE.MathUtils.lerp(y, y2, decimalPointBelow);
 						sensorData_delta = THREE.MathUtils.lerp(sensorData, sensorData2, decimalPointBelow);
 					}
-					context.moveTo(zero_pos_x, dy);
-					context.lineTo(zero_pos_x + chartWidth, dy);
+					//context.moveTo(zero_pos_x, dy);
+					//context.lineTo(zero_pos_x + chartWidth, dy);
 
 					/*dot point 그리기*/
 					context.fillStyle = '#ff00ff';
-					context.arc(mouseX, dy, 3, 0, 2 * Math.PI, true);
+					context.arc(mouseX, dy, 4, 0, 2 * Math.PI, true);
 					context.fill();
 
 					/*label*/
-					context.font = "12px serif";
+					context.font = "15px serif";
 					let s_sensorData = sensorData_delta.toFixed(2);
 					let measure = context.measureText(s_sensorData);
 					context.fillText(s_sensorData,mouseX - 20, mouseY);
