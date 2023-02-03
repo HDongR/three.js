@@ -19,7 +19,6 @@
 		<script src="https://code.jquery.com/jquery-3.6.0.js"></script>
 		<script src="https://code.jquery.com/ui/1.13.2/jquery-ui.js"></script>
 		<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-		<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 		<script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
 		<script src="https://kit.fontawesome.com/2c2025e86e.js" crossorigin="anonymous"></script>
   
@@ -71,7 +70,6 @@
 			import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 
 			import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-			import { Reflector } from 'three/addons/objects/Reflector.js';
             import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 			import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 			import { TransformControls } from 'three/addons/controls/TransformControls.js';
@@ -513,6 +511,8 @@
 				width = $('#timeStepSlider').width();
 				height = 300;
 
+				currentListLen = sensorList.length;
+
 				chart_offset_top = 20;
 				chart_offset_bottom = 20;
 				chart_offset_left = 20;
@@ -544,13 +544,13 @@
 				settingCanvas = document.getElementById("settingCanvas"); //차트 style setting
 				settingCanvasContext = settingCanvas.getContext("2d");
 
-				dataCanvas = document.getElementById("dataCanvas"); //데이터뷰, 이벤트처리
+				dataCanvas = document.getElementById("dataCanvas"); //데이터뷰
 				dataCanvasContext = dataCanvas.getContext("2d");
 
 				animLineCanvas = document.getElementById("animLineCanvas"); //애니메이션 라인
 				animLineCanvasContext = animLineCanvas.getContext("2d");
 
-				crossHairCanvas = document.getElementById("crossHairCanvas"); //crosshair
+				crossHairCanvas = document.getElementById("crossHairCanvas"); //crosshair, 이벤트처리
 				crossHairCanvasContext = crossHairCanvas.getContext("2d");
 				
 				drawChartSetting(settingCanvasContext);
@@ -641,6 +641,18 @@
 					context.lineTo(next_xPos, next_yPos);
 				}
 				
+				context.font = "12px serif";
+
+				let startTime = startMinDateGlobal + (originLeftOffset * 1/hz * 1000);
+				let startDateTime = new Date(startTime).toISOString();
+
+				let endTime = startMinDateGlobal + ((originLeftOffset + currentListLen) * 1/hz * 1000);
+				let endDateTime = new Date(endTime).toISOString();
+				
+				let measureEnd = context.measureText(endDateTime);
+
+				context.fillText(startDateTime, zero_pos_x, height - font_height);
+				context.fillText(endDateTime, width - measureEnd.actualBoundingBoxRight - chart_offset_right, height - font_height);
 				context.stroke();
 			}
 
